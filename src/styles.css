@@ -243,12 +243,14 @@ h3 {
 }
 .hud-target .hud-pop {
   display: block;
-  min-height: 1em;
+  height: 1.25em;
   margin-top: 2px;
+  overflow: hidden;
   color: var(--hit);
   font-family: var(--font-num);
   font-size: 0.85rem;
   font-weight: 800;
+  line-height: 1.25;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -256,6 +258,7 @@ h3 {
 .hud-pop.is-miss { color: var(--miss); }
 
 .arena {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -294,11 +297,16 @@ h3 {
 .timer.is-frozen #timer-fill { background: var(--miss); }
 
 .strike, .pause-bar {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  left: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
+  margin: 0;
+  padding: 6px 10px;
   border-radius: 14px;
 }
 .strike {
@@ -308,15 +316,15 @@ h3 {
 .strike p, .pause-bar p { color: var(--muted); font-size: 0.85rem; }
 #strike-text, .pause-bar strong { color: var(--text); font-weight: 800; }
 .strike-icon {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: var(--miss);
   color: #1a0505;
-  font: 800 1.2rem/1 var(--font-num);
+  font: 800 1.1rem/1 var(--font-num);
 }
 .pause-bar {
   justify-content: space-between;
@@ -341,6 +349,7 @@ h3 {
   position: relative;
   overflow: auto;
   overflow-anchor: none;
+  scrollbar-gutter: stable;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -364,16 +373,15 @@ h3 {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 .word.is-pass { opacity: 0.72; }
+.first { font-weight: 700; }
 .word.active .first {
   color: var(--accent);
-  font-weight: 800;
   text-decoration: underline;
   text-decoration-thickness: 3px;
   text-underline-offset: 0.14em;
 }
 .word.active.is-pass .first {
   color: inherit;
-  font-weight: 700;
   text-decoration: none;
 }
 .break { flex-basis: 100%; height: 0.75em; }

@@ -1,4 +1,5 @@
 import { must, setText } from './dom.js';
+import { scrollTopToReveal } from './scroll.js';
 
 function fillWord(node, word) {
   node.replaceChildren();
@@ -12,15 +13,6 @@ function fillWord(node, word) {
   mark.className = 'first';
   mark.textContent = word.displayChar;
   node.append(mark, word.after);
-}
-
-function sliceBounds(index, total) {
-  const size = 90;
-  if (total <= size) return [0, total];
-  let start = Math.max(0, index - 28);
-  let end = Math.min(total, start + size);
-  start = Math.max(0, end - size);
-  return [start, end];
 }
 
 export function createPainter() {
@@ -76,7 +68,7 @@ export function createPainter() {
   const state = {
     token: '',
     activeEl: null,
-    view: '',
+    layout: '',
     rsvpKey: '',
     hot: '\u0000',
     status: '',
@@ -103,6 +95,17 @@ export function createPainter() {
     karaoke.replaceChildren(fragment);
   }
 
+  function reveal(el) {
+    if (!el || karaoke.hidden) return;
+    const next = scrollTopToReveal(
+      karaoke.scrollTop,
+      karaoke.clientHeight,
+      el.offsetTop,
+      el.offsetHeight,
+    );
+    if (Math.abs(next - karaoke.scrollTop) >= 1) karaoke.scrollTop = next;
+  }
+
   function syncActive(snap) {
     if (snap.status === 'finished' || snap.total === 0) {
       state.activeEl?.classList.remove('active');
@@ -111,34 +114,29 @@ export function createPainter() {
     }
 
     const el = karaoke.querySelector(`[data-i="${snap.index}"]`);
-    const viewChanged = state.view !== snap.config.viewMode;
-    if (el && el === state.activeEl && el.classList.contains('active') && !viewChanged) return;
+    const wordChanged = el !== state.activeEl;
+    if (wordChanged) {
+      state.activeEl?.classList.remove('active');
+      state.activeEl = el;
+      el?.classList.add('active');
+    }
+    if (!el || snap.config.viewMode !== 'karaoke') {
+      state.layout = '';
+      return;
+    }
 
-    state.activeEl?.classList.remove('active');
-    state.activeEl = el;
-    if (!el) return;
-    el.classList.add('active');
-    if (snap.config.viewMode !== 'karaoke') return;
-
-    const box = karaoke.getBoundingClientRect();
-    const wordBox = el.getBoundingClientRect();
-    const outside = wordBox.top < box.top + 4 || wordBox.bottom > box.bottom - 4;
-    if (!outside) return;
-    const top = el.offsetTop - karaoke.clientHeight / 2 + el.offsetHeight / 2;
-    karaoke.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+    const layout = `${snap.config.fontScale}:${snap.config.focusMode}:${karaoke.clientHeight}`;
+    if (wordChanged || layout !== state.layout) reveal(el);
+    state.layout = layout;
   }
 
   function ensureWindow(snap, words) {
-    const total = words.length;
-    const anchor = snap.status === 'finished'
-      ? Math.max(0, total - 1)
-      : Math.min(snap.index, Math.max(0, total - 1));
-    const [start, end] = sliceBounds(total ? anchor : 0, total);
-    const token = `${snap.epoch}:${start}:${end}`;
+    const token = String(snap.epoch);
     if (token !== state.token) {
-      renderSlice(words, start, end);
+      renderSlice(words, 0, words.length);
       state.token = token;
       state.activeEl = null;
+      state.layout = '';
     }
     syncActive(snap);
   }
@@ -182,7 +180,6 @@ export function createPainter() {
     rsvp.hidden = config.viewMode !== 'rsvp';
     timer.hidden = !config.showTimeBar;
     ensureWindow(snap, words);
-    state.view = config.viewMode;
     syncRsvp(snap, words);
 
     const remaining = snap.status === 'frozen' ? 0 : 1 - snap.progress;
