@@ -1,0 +1,365 @@
+import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
+import { applyFilter, normalizeKey, parseText } from './parseText.js';
+import { pointsForHit } from './scoring.js';
+import { wordDeadlineMs } from './timing.js';
+
+/**
+ * ReflexRead rules and clock. The page paints snapshots and sends keys.
+ * Pass `at` from performance.now() or a test. Time only moves inside tick(),
+ * and only while status is playing or frozen.
+ *
+ * Add a mechanic here, with a test, before wiring it to the DOM.
+ */
+export const STATUS = {
+  IDLE: 'idle',
+  PLAYING: 'playing',
+  PAUSED: 'paused',
+  FROZEN: 'frozen',
+  BREAK: 'break',
+  FINISHED: 'finished',
+};
+
+const INPUT_LOCK_MS = 35;
+
+export function createGame({ now = () => 0 } = {}) {
+  let config = { ...DEFAULT_CONFIG };
+  let words = [];
+  let labelText = 'Article';
+  let status = STATUS.IDLE;
+  let index = 0;
+  let roundStartIndex = 0;
+  let wordStartedAt = 0;
+  let deadlineMs = 0;
+  let responded = false;
+  let missReason = null;
+  let missedKey = null;
+  let freezeUntil = 0;
+  let freezeRemaining = 0;
+  let held = false;
+  let lastPressAt = Number.NEGATIVE_INFINITY;
+  let epoch = 0;
+  let score = 0;
+  let streak = 0;
+  let maxStreak = 0;
+  let hits = 0;
+  let misses = 0;
+  let reactionTimes = [];
+  let events = [];
+
+  function emit(event) {
+    events.push(event);
+  }
+
+  function resetStats() {
+    score = 0;
+    streak = 0;
+    maxStreak = 0;
+    hits = 0;
+    misses = 0;
+    reactionTimes = [];
+  }
+
+  function beginWord(at) {
+    status = STATUS.PLAYING;
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    wordStartedAt = at;
+    deadlineMs = wordDeadlineMs(words[index], config);
+    emit({ type: 'word', index });
+  }
+
+  function finish() {
+    status = STATUS.FINISHED;
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    held = false;
+    emit({ type: 'finish', score, maxStreak });
+  }
+
+  function advance(at) {
+    const next = index + 1;
+    if (next >= words.length) {
+      index = words.length;
+      finish();
+      return;
+    }
+
+    const doneInRound = next - roundStartIndex;
+    index = next;
+    if (config.roundSize > 0 && doneInRound >= config.roundSize) {
+      status = STATUS.BREAK;
+      responded = false;
+      missReason = null;
+      missedKey = null;
+      emit({ type: 'break', completed: doneInRound });
+      return;
+    }
+
+    beginWord(at);
+  }
+
+  function hit(at) {
+    const reaction = Math.max(0, Math.round(at - wordStartedAt));
+    streak += 1;
+    if (streak > maxStreak) maxStreak = streak;
+    hits += 1;
+    reactionTimes.push(reaction);
+    const points = pointsForHit(streak);
+    score += points;
+    responded = true;
+    emit({ type: 'hit', points, reaction, streak, score, maxStreak });
+    if (streak % 10 === 0) emit({ type: 'milestone', streak });
+    if (config.advanceOnHit) advance(at);
+  }
+
+  function miss(reason, at, pressed) {
+    misses += 1;
+    streak = 0;
+    responded = true;
+    missReason = reason;
+    missedKey = pressed;
+    emit({
+      type: 'miss',
+      reason,
+      answer: words[index]?.targetChar ?? null,
+      pressed,
+    });
+
+    const freezeMs = Math.round(Math.max(0, config.freezeSec) * 1000);
+    if (freezeMs <= 0) {
+      advance(at);
+      return;
+    }
+
+    status = STATUS.FROZEN;
+    freezeUntil = at + freezeMs;
+    held = false;
+  }
+
+  function load(raw, label = 'Custom') {
+    labelText = label || 'Custom';
+    words = parseText(raw, config.filter);
+    resetStats();
+    index = 0;
+    roundStartIndex = 0;
+    status = STATUS.IDLE;
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    held = false;
+    lastPressAt = Number.NEGATIVE_INFINITY;
+    epoch += 1;
+    emit({ type: 'load', total: words.length });
+    return words.length;
+  }
+
+  function setConfig(partial) {
+    const previousFilter = config.filter;
+    config = sanitizeConfig({ ...config, ...partial });
+    if (config.filter !== previousFilter) {
+      words = applyFilter(words, config.filter);
+      epoch += 1;
+    }
+    if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
+      deadlineMs = wordDeadlineMs(words[index], config);
+    }
+    return { ...config };
+  }
+
+  function start(at = now()) {
+    if (!words.length) return false;
+    if (status !== STATUS.IDLE && status !== STATUS.FINISHED) return false;
+    resetStats();
+    index = 0;
+    roundStartIndex = 0;
+    held = false;
+    missReason = null;
+    missedKey = null;
+    lastPressAt = Number.NEGATIVE_INFINITY;
+    emit({ type: 'start' });
+    beginWord(at);
+    return true;
+  }
+
+  function pause() {
+    if (status !== STATUS.PLAYING) return false;
+    status = STATUS.PAUSED;
+    emit({ type: 'pause' });
+    return true;
+  }
+
+  function resume(at = now()) {
+    if (status !== STATUS.PAUSED) return false;
+    emit({ type: 'resume' });
+    if (index >= words.length) {
+      finish();
+      return true;
+    }
+    if (responded) {
+      advance(at);
+      return true;
+    }
+    beginWord(at);
+    return true;
+  }
+
+  function continueRound(at = now()) {
+    if (status !== STATUS.BREAK) return false;
+    if (index >= words.length) {
+      finish();
+      return true;
+    }
+    roundStartIndex = index;
+    beginWord(at);
+    return true;
+  }
+
+  function jumpTo(target) {
+    if (status !== STATUS.PAUSED) return false;
+    const nextIndex = Number(target);
+    if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= words.length) return false;
+    index = nextIndex;
+    roundStartIndex = nextIndex;
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    deadlineMs = wordDeadlineMs(words[index], config);
+    emit({ type: 'jump', index });
+    return true;
+  }
+
+  function hold(at = now()) {
+    if (status !== STATUS.FROZEN || held) return false;
+    freezeRemaining = Math.max(0, freezeUntil - at);
+    held = true;
+    return true;
+  }
+
+  function release(at = now()) {
+    if (!held) return false;
+    freezeUntil = at + freezeRemaining;
+    held = false;
+    return true;
+  }
+
+  function press(raw, at = now()) {
+    if (status !== STATUS.PLAYING) return false;
+    if (at - lastPressAt < INPUT_LOCK_MS) return false;
+    const word = words[index];
+    if (!word?.isTarget || responded) return false;
+    if (at - wordStartedAt >= deadlineMs) return false;
+    const key = normalizeKey(raw);
+    if (!key) return false;
+    lastPressAt = at;
+    if (key === word.targetChar) hit(at);
+    else miss('wrong', at, key);
+    return true;
+  }
+
+  function tick(at = now()) {
+    if (held) return;
+    if (!words.length) return;
+
+    if (status === STATUS.FROZEN) {
+      if (at >= freezeUntil) advance(at);
+      return;
+    }
+
+    if (status !== STATUS.PLAYING) return;
+    if (!words[index]) {
+      finish();
+      return;
+    }
+
+    if (at - wordStartedAt >= deadlineMs) {
+      const word = words[index];
+      if (word.isTarget && !responded) miss('timeout', at, null);
+      else advance(at);
+    }
+  }
+
+  function snapshot(at = now()) {
+    const word = words[index] || null;
+    const total = words.length;
+    let progress = 0;
+    if (status === STATUS.PLAYING && deadlineMs > 0) {
+      progress = clamp01((at - wordStartedAt) / deadlineMs);
+    } else if (status === STATUS.FROZEN) {
+      progress = 1;
+    }
+
+    const attempts = hits + misses;
+    let freezeLeftMs = 0;
+    if (status === STATUS.FROZEN) {
+      freezeLeftMs = held ? freezeRemaining : Math.max(0, freezeUntil - at);
+    }
+
+    return {
+      status,
+      epoch,
+      index,
+      total,
+      roundSize: config.roundSize,
+      roundStart: roundStartIndex,
+      progress,
+      deadlineMs,
+      score,
+      streak,
+      maxStreak,
+      hits,
+      misses,
+      accuracy: attempts ? Math.round((hits / attempts) * 100) : null,
+      avgReaction: reactionTimes.length
+        ? Math.round(reactionTimes.reduce((sum, value) => sum + value, 0) / reactionTimes.length)
+        : null,
+      answer: word?.isTarget ? word.targetChar : null,
+      isTarget: Boolean(word?.isTarget),
+      missReason,
+      missedKey,
+      freezeLeftMs,
+      articleLabel: labelText,
+      word,
+      config: { ...config },
+    };
+  }
+
+  return {
+    load,
+    setConfig,
+    start,
+    pause,
+    resume,
+    continueRound,
+    jumpTo,
+    hold,
+    release,
+    press,
+    tick,
+    snapshot,
+    consumeEvents() {
+      const batch = events;
+      events = [];
+      return batch;
+    },
+    get status() {
+      return status;
+    },
+    get held() {
+      return held;
+    },
+    get words() {
+      return words;
+    },
+    get config() {
+      return { ...config };
+    },
+  };
+}
+
+function clamp01(value) {
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}

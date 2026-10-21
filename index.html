@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="signal">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="ReflexRead is a first-letter reflex game for reading.">
+  <title>ReflexRead</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="top">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">R</div>
+        <div>
+          <h1>ReflexRead</h1>
+          <p class="brand-sub"><span class="lab">Lab</span> First-letter reflex reading</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="open-library" class="btn" aria-label="Articles">
+          <span class="full">Articles</span><span class="short">Text</span>
+        </button>
+        <button type="button" id="open-settings" class="btn" aria-label="Tune">
+          <span class="full">Tune</span><span class="short">Tune</span>
+        </button>
+        <button type="button" id="open-stats" class="btn" aria-label="Stats">
+          <span class="full">Stats</span><span class="short">Stats</span>
+        </button>
+        <button type="button" id="toggle-sound" class="btn" aria-pressed="true">
+          <span class="full">Sound on</span><span class="short">Snd</span>
+        </button>
+        <button type="button" id="toggle-focus" class="btn" aria-pressed="false">
+          <span class="full">Focus</span><span class="short">Focus</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="hud" aria-label="Session">
+      <div class="stat hud-target">
+        <span id="hud-target-label">Up next</span>
+        <b id="hud-target" class="target-key">—</b>
+        <span id="hud-pop" class="hud-pop"></span>
+      </div>
+      <div class="stat">
+        <span>Streak</span>
+        <b id="hud-streak">0</b>
+      </div>
+      <div class="stat">
+        <span>Score</span>
+        <b id="hud-score">0</b>
+      </div>
+      <div class="stat hud-extra">
+        <span>WPM</span>
+        <b id="hud-pace">150</b>
+      </div>
+      <div class="stat hud-extra">
+        <span>Accuracy</span>
+        <b id="hud-accuracy">—</b>
+      </div>
+    </section>
+
+    <section class="arena" id="arena" aria-label="Reading">
+      <div class="arena-top">
+        <p id="article-meta">Loading article</p>
+        <p id="round-meta"></p>
+      </div>
+      <div
+        id="timer"
+        class="timer"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="100"
+        aria-label="Time left on this word"
+      >
+        <div id="timer-fill"></div>
+      </div>
+      <div id="strike" class="strike" hidden>
+        <div class="strike-icon" aria-hidden="true">!</div>
+        <div>
+          <p id="strike-text"></p>
+          <p id="strike-sub"></p>
+        </div>
+      </div>
+      <div id="pause-bar" class="pause-bar" hidden>
+        <div>
+          <strong>Paused</strong>
+          <p>This word starts fresh when you resume. Click a word to move the highlight.</p>
+        </div>
+        <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
+      </div>
+      <div class="stage">
+        <div id="karaoke" class="karaoke"></div>
+        <div id="rsvp" class="rsvp" hidden>
+          <p id="rsvp-prev" class="rsvp-side"></p>
+          <p id="rsvp-current" class="rsvp-current"></p>
+          <p id="rsvp-next" class="rsvp-side"></p>
+        </div>
+        <div id="overlay" class="overlay">
+          <div id="panel-idle" class="panel">
+            <h2>Press the first letter</h2>
+            <ol class="steps">
+              <li>Read the highlighted word.</li>
+              <li>Press its first letter before the bar runs out.</li>
+              <li>Hits build a streak. A miss freezes the board, then you continue.</li>
+            </ol>
+            <button type="button" id="idle-start" class="btn btn-primary btn-large">Start</button>
+            <p class="hint">Space also starts, pauses, and resumes.</p>
+            <p id="idle-round" class="hint"></p>
+            <p id="idle-best" class="hint" hidden></p>
+          </div>
+          <div id="panel-break" class="panel" hidden>
+            <h2>Breath</h2>
+            <p id="break-copy"></p>
+            <button type="button" id="break-continue" class="btn btn-primary btn-large">Continue</button>
+            <p class="hint">Space continues. Your streak is still there.</p>
+          </div>
+          <div id="panel-done" class="panel" hidden>
+            <h2>Done</h2>
+            <p>You reached the end of this article.</p>
+            <dl class="stats">
+              <div><dt>Score</dt><dd id="done-score">0</dd></div>
+              <div><dt>Best streak</dt><dd id="done-streak">0</dd></div>
+              <div><dt>Accuracy</dt><dd id="done-accuracy">—</dd></div>
+              <div><dt>Reaction</dt><dd id="done-reaction">—</dd></div>
+            </dl>
+            <p id="done-note" class="record" hidden></p>
+            <div class="btn-row">
+              <button type="button" id="done-again" class="btn btn-primary">Read again</button>
+              <button type="button" id="done-article" class="btn">Change article</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="keypad-dock" id="keypad-dock" aria-label="On-screen keys">
+      <div class="dock-bar">
+        <p>On-screen keys</p>
+        <button type="button" id="toggle-keypad" class="btn" aria-expanded="true">Hide keys</button>
+      </div>
+      <div id="keypad-body">
+        <div id="keys-letters" class="keypad-grid"></div>
+        <div id="keys-digits" class="digit-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-settings" class="modal-back" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
+      <div class="modal-head">
+        <div>
+          <h2 id="settings-title">Tune</h2>
+          <p class="field-help">Changes apply right away. A run that was going stays paused until you press Space.</p>
+        </div>
+        <button type="button" class="btn js-close">Close</button>
+      </div>
+
+      <h3>Pace</h3>
+      <div class="pace-grid">
+        <button type="button" class="btn" data-pace="warmup">Warmup</button>
+        <button type="button" class="btn" data-pace="flow">Flow</button>
+        <button type="button" class="btn" data-pace="reflex">Reflex</button>
+      </div>
+      <p class="field-help">Starting points. After you pick one, the sliders still win.</p>
+
+      <label class="field">
+        <span class="field-top"><span>Reading speed</span><b id="cfg-wpm-val">150 WPM</b></span>
+        <input id="cfg-wpm" type="range" min="60" max="800" step="10" value="150">
+        <span class="field-help">How fast the highlight moves. Lower is calmer.</span>
+      </label>
+      <label class="field">
+        <span class="field-top"><span>Forgiveness</span><b id="cfg-forgive-val">280 ms</b></span>
+        <input id="cfg-forgive" type="range" min="0" max="800" step="10" value="280">
+        <span class="field-help">Extra time after the word's slot before it counts as a miss.</span>
+      </label>
+      <label class="field">
+        <span class="field-top"><span>Freeze on a miss</span><b id="cfg-freeze-val">0.8 s</b></span>
+        <input id="cfg-freeze" type="range" min="0" max="3" step="0.1" value="0.8">
+        <span class="field-help">How long the board stops. Zero keeps moving.</span>
+      </label>
+      <label class="field">
+        <span class="field-top"><span>Punctuation pause</span><b id="cfg-punct-val">1.5×</b></span>
+        <input id="cfg-punct" type="range" min="1" max="3" step="0.1" value="1.5">
+        <span class="field-help">Extra time on words with a comma, period, or question mark.</span>
+      </label>
+      <p id="cfg-window" class="window-note"></p>
+
+      <label class="field">
+        <span class="field-top"><span>Round length</span><b id="cfg-round-val">40 words</b></span>
+        <input id="cfg-round" type="range" min="0" max="200" step="5" value="40">
+        <span class="field-help">0 reads the whole article with no breath screen.</span>
+      </label>
+
+      <h3>What you press</h3>
+      <label class="field">
+        <span>Which words need a key</span>
+        <select id="cfg-filter">
+          <option value="all">Every word</option>
+          <option value="long">Long words, 4 letters or more</option>
+          <option value="vowel">Starts with A, E, I, O, or U</option>
+          <option value="capital">Starts with a capital</option>
+        </select>
+        <span class="field-help">Other words stay in the sentence and dim. You only press on the bright ones.</span>
+      </label>
+
+      <h3>How it looks</h3>
+      <div class="choice">
+        <label>
+          <input type="radio" name="view" value="karaoke" checked>
+          <span><strong>Karaoke</strong><small>The paragraph stays up and the highlight moves.</small></span>
+        </label>
+        <label>
+          <input type="radio" name="view" value="rsvp">
+          <span><strong>One word</strong><small>A large word, with the previous and next nearby.</small></span>
+        </label>
+      </div>
+      <div class="theme-grid" id="theme-grid">
+        <button type="button" class="theme-btn is-active" data-theme="signal" aria-pressed="true">Signal</button>
+        <button type="button" class="theme-btn" data-theme="paper" aria-pressed="false">Paper</button>
+        <button type="button" class="theme-btn" data-theme="night" aria-pressed="false">Night</button>
+        <button type="button" class="theme-btn" data-theme="contrast" aria-pressed="false">Contrast</button>
+      </div>
+      <label class="field">
+        <span class="field-top"><span>Type size</span><b id="cfg-font-val">100%</b></span>
+        <input id="cfg-font" type="range" min="85" max="160" step="5" value="100">
+      </label>
+
+      <label class="check">
+        <span><strong>Advance on a hit</strong><p>Move as soon as the letter is right. Off keeps the word up until the bar ends.</p></span>
+        <input id="cfg-advance" type="checkbox" checked>
+      </label>
+      <label class="check">
+        <span><strong>Show the answer</strong><p>Puts the first letter in the banner. Turn this off to read it from the word.</p></span>
+        <input id="cfg-target" type="checkbox" checked>
+      </label>
+      <label class="check">
+        <span><strong>Show the time bar</strong><p>A draining bar is easier to trust than a hidden clock.</p></span>
+        <input id="cfg-bar" type="checkbox" checked>
+      </label>
+      <label class="check">
+        <span><strong>Sound</strong><p>A soft chime on a hit, a low tone on a miss.</p></span>
+        <input id="cfg-sound" type="checkbox" checked>
+      </label>
+      <label class="check">
+        <span><strong>On-screen keys</strong><p>Useful on a phone, or when you want to click instead of type.</p></span>
+        <input id="cfg-keypad" type="checkbox" checked>
+      </label>
+      <label class="check">
+        <span><strong>Focus mode</strong><p>Hides the extra numbers and the keys so the word is the only job.</p></span>
+        <input id="cfg-focus" type="checkbox">
+      </label>
+      <label class="check">
+        <span><strong>Reduce motion</strong><p>Stops the miss flash. The time bar still moves.</p></span>
+        <input id="cfg-motion" type="checkbox">
+      </label>
+
+      <div class="btn-row modal-actions">
+        <button type="button" id="cfg-reset" class="btn">Reset tune</button>
+        <button type="button" class="btn btn-primary js-close">Back to reading</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-library" class="modal-back" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="library-title" tabindex="-1">
+      <div class="modal-head">
+        <div>
+          <h2 id="library-title">Articles</h2>
+          <p class="field-help">Pick a text or paste your own. Loading it stops the current run.</p>
+        </div>
+        <button type="button" class="btn js-close">Close</button>
+      </div>
+      <div id="preset-list" class="preset-grid"></div>
+      <label class="field">
+        <span class="field-top"><span>Paste a long article</span><b id="article-count">0 words</b></span>
+        <textarea id="article-input" rows="8" placeholder="Paste an article, a chapter, or a few paragraphs."></textarea>
+      </label>
+      <p id="library-note" class="field-help"></p>
+      <div class="btn-row modal-actions">
+        <button type="button" id="load-article" class="btn btn-primary">Load into game</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-stats" class="modal-back" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stats-title" tabindex="-1">
+      <div class="modal-head">
+        <div>
+          <h2 id="stats-title">This run</h2>
+          <p class="field-help">Numbers from the article that is loaded now.</p>
+        </div>
+        <button type="button" class="btn js-close">Close</button>
+      </div>
+      <dl class="stats">
+        <div><dt>Score</dt><dd id="stat-score">0</dd></div>
+        <div><dt>Best streak</dt><dd id="stat-streak">0</dd></div>
+        <div><dt>Accuracy</dt><dd id="stat-accuracy">—</dd></div>
+        <div><dt>Reaction</dt><dd id="stat-reaction">—</dd></div>
+        <div><dt>Hits</dt><dd id="stat-hits">0</dd></div>
+        <div><dt>Misses</dt><dd id="stat-misses">0</dd></div>
+        <div><dt>Words</dt><dd id="stat-words">0</dd></div>
+        <div><dt>All-time streak</dt><dd id="stat-best">0</dd></div>
+      </dl>
+      <button type="button" class="btn js-close btn-block">Back to reading</button>
+    </div>
+  </div>
+
+  <p id="live" class="sr-only" aria-live="polite"></p>
+  <noscript>ReflexRead needs JavaScript to run the reading game.</noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
