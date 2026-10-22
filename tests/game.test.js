@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGame, STATUS } from '../src/engine/game.js';
+import { recallBounds, selectTarget } from '../src/engine/recall.js';
+import { RECALL_BONUS } from '../src/engine/scoring.js';
 
 function setup(text, config = {}) {
   const game = createGame();
@@ -175,6 +177,7 @@ describe('game', () => {
     press(40);
     press(80);
     expect(game.status).toBe(STATUS.BREAK);
+    expect(game.snapshot().recall).toBeNull();
     expect(game.press('g', 120)).toBe(false);
     expect(game.continueRound(200)).toBe(true);
     expect(game.snapshot(200).index).toBe(2);
@@ -185,8 +188,10 @@ describe('game', () => {
     game.continueRound(300);
     press(340);
     expect(game.status).toBe(STATUS.FINISHED);
+    expect(game.snapshot().recall).toBeNull();
     expect(game.snapshot().score).toBe(500);
     expect(game.snapshot().maxStreak).toBe(5);
+    expect(game.start(400)).toBe(true);
   });
 
   it('plays a milestone on the tenth hit', () => {
@@ -233,6 +238,154 @@ describe('game', () => {
     game.press('x', 10);
     expect(game.status).toBe(STATUS.FINISHED);
     expect(game.snapshot()).toMatchObject({ misses: 1, score: 0 });
+  });
+
+  it('holds the breath screen until the recall is answered', () => {
+    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel', { roundSize: 4 });
+    game.start(0);
+    let at = 0;
+    for (const letter of ['a', 'b', 'c', 'd']) {
+      at += 40;
+      expect(game.press(letter, at)).toBe(true);
+    }
+
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(selectTarget(game.words, 0, 4).word.original).toBe('bravo');
+    const snap = game.snapshot(at);
+    expect(snap.recall.phase).toBe('ask');
+    expect(snap.recall.sentence).toBeNull();
+    expect(snap.recall.choices).toHaveLength(3);
+    expect(snap.recall.choices[0]).toEqual({
+      id: expect.any(Number),
+      label: expect.any(String),
+    });
+    expect(game.answerRecall(99)).toBe(false);
+    expect(game.acknowledgeRecall()).toBe(false);
+    expect(game.snapshot().recall.phase).toBe('ask');
+    expect(game.continueRound(at)).toBe(false);
+    expect(game.start(at)).toBe(false);
+
+    const wrong = snap.recall.choices.find((choice) => choice.label !== 'bravo');
+    expect(['echo', 'foxtrot', 'golf', 'hotel']).toContain(wrong.label);
+    expect(game.answerRecall(wrong.id)).toBe(true);
+    expect(game.answerRecall(wrong.id)).toBe(false);
+    const revealed = game.snapshot();
+    expect(revealed).toMatchObject({ score: 400, streak: 4, misses: 0 });
+    expect(revealed.recall.phase).toBe('reveal');
+    expect(revealed.recall.sentence.some((part) => part.marked && part.text === 'bravo')).toBe(true);
+    expect(revealed.recall.sentence.map((part) => part.text)).not.toContain('echo');
+    expect(game.continueRound(at)).toBe(false);
+    expect(game.acknowledgeRecall()).toBe(true);
+    expect(game.continueRound(at + 50)).toBe(true);
+    expect(game.status).toBe(STATUS.PLAYING);
+    expect(game.snapshot().recall).toBeNull();
+  });
+
+  it('adds the recall bonus and leaves the streak alone', () => {
+    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel', { roundSize: 4 });
+    game.start(0);
+    let at = 0;
+    for (const letter of ['a', 'b', 'c', 'd']) {
+      at += 40;
+      game.press(letter, at);
+    }
+    const choice = game.snapshot().recall.choices.find((item) => item.label === 'bravo');
+    expect(game.answerRecall(choice.id)).toBe(true);
+    expect(game.acknowledgeRecall()).toBe(false);
+    expect(game.snapshot()).toMatchObject({
+      score: 400 + RECALL_BONUS,
+      streak: 4,
+      hits: 4,
+      misses: 0,
+      accuracy: 100,
+    });
+    expect(game.snapshot().recall).toMatchObject({ phase: 'ready', correct: true, points: RECALL_BONUS });
+    expect(game.continueRound(at + 50)).toBe(true);
+  });
+
+  it('asks about the last stretch when the article ends inside a round', () => {
+    const text = 'alpha bravo charlie delta echo foxtrot golf hotel';
+    const game = setup(text, { roundSize: 4 });
+    game.start(0);
+    let at = 0;
+    const press = (letter) => {
+      at += 40;
+      expect(game.press(letter, at)).toBe(true);
+    };
+
+    for (const letter of ['a', 'b', 'c', 'd']) press(letter);
+    const first = game.snapshot().recall.choices.find((choice) => choice.label === 'bravo');
+    expect(game.answerRecall(first.id)).toBe(true);
+    expect(game.continueRound(at + 20)).toBe(true);
+
+    for (const letter of ['e', 'f', 'g', 'h']) press(letter);
+    expect(game.status).toBe(STATUS.FINISHED);
+    expect(selectTarget(game.words, 4, 8).word.original).toBe('foxtrot');
+    expect(game.snapshot().recall.phase).toBe('ask');
+    const labels = game.snapshot().recall.choices.map((choice) => choice.label);
+    expect(labels).toContain('foxtrot');
+    for (const label of labels) {
+      if (label !== 'foxtrot') expect(['alpha', 'bravo', 'charlie', 'delta']).toContain(label);
+    }
+    expect(game.start(at)).toBe(false);
+
+    const right = game.snapshot().recall.choices.find((choice) => choice.label === 'foxtrot');
+    expect(game.answerRecall(right.id)).toBe(true);
+    expect(game.snapshot()).toMatchObject({
+      status: STATUS.FINISHED,
+      score: 800 + RECALL_BONUS * 2,
+      streak: 8,
+      hits: 8,
+      misses: 0,
+      accuracy: 100,
+    });
+    expect(game.snapshot().recall).toMatchObject({ phase: 'ready', correct: true, points: RECALL_BONUS });
+    expect(game.consumeEvents().some((event) => event.type === 'recall-hit' && event.points === RECALL_BONUS)).toBe(true);
+    expect(game.start(at + 40)).toBe(true);
+  });
+
+  it('drops an open recall when a new article is loaded', () => {
+    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel', { roundSize: 4 });
+    game.start(0);
+    let at = 0;
+    for (const letter of ['a', 'b', 'c', 'd']) {
+      at += 40;
+      game.press(letter, at);
+    }
+    expect(game.snapshot().recall.phase).toBe('ask');
+    expect(game.load('Beta Gamma', 'Next')).toBe(2);
+    expect(game.snapshot()).toMatchObject({
+      status: STATUS.IDLE,
+      score: 0,
+      recall: null,
+      articleLabel: 'Next',
+    });
+    expect(game.start(0)).toBe(true);
+  });
+
+  it('asks once at the end when rounds are off', () => {
+    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel');
+    game.start(0);
+    let at = 0;
+    for (const letter of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
+      at += 40;
+      expect(game.press(letter, at)).toBe(true);
+    }
+
+    expect(game.status).toBe(STATUS.FINISHED);
+    const bounds = recallBounds(game.words, 0, game.words.length);
+    expect(selectTarget(game.words, bounds.start, bounds.end).word.original).toBe('foxtrot');
+    expect(game.snapshot().recall.phase).toBe('ask');
+    expect(game.start(at)).toBe(false);
+
+    const wrong = game.snapshot().recall.choices.find((choice) => choice.label !== 'foxtrot');
+    expect(['alpha', 'bravo', 'charlie', 'delta']).toContain(wrong.label);
+    expect(game.answerRecall(wrong.id)).toBe(true);
+    expect(game.snapshot().score).toBe(800);
+    expect(game.start(at)).toBe(false);
+    expect(game.acknowledgeRecall()).toBe(true);
+    expect(game.start(at + 50)).toBe(true);
+    expect(game.snapshot()).toMatchObject({ status: STATUS.PLAYING, score: 0, recall: null });
   });
 
   it('passes over punctuation-only tokens', () => {

@@ -1,6 +1,7 @@
 import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, normalizeKey, parseText } from './parseText.js';
-import { pointsForHit } from './scoring.js';
+import { buildRecall, recallBounds } from './recall.js';
+import { RECALL_BONUS, pointsForHit } from './scoring.js';
 import { wordDeadlineMs } from './timing.js';
 
 /**
@@ -21,7 +22,7 @@ export const STATUS = {
 
 const INPUT_LOCK_MS = 35;
 
-export function createGame({ now = () => 0 } = {}) {
+export function createGame({ now = () => 0, random = Math.random } = {}) {
   let config = { ...DEFAULT_CONFIG };
   let words = [];
   let labelText = 'Article';
@@ -44,6 +45,7 @@ export function createGame({ now = () => 0 } = {}) {
   let hits = 0;
   let misses = 0;
   let reactionTimes = [];
+  let recall = null;
   let events = [];
 
   function emit(event) {
@@ -57,6 +59,7 @@ export function createGame({ now = () => 0 } = {}) {
     hits = 0;
     misses = 0;
     reactionTimes = [];
+    recall = null;
   }
 
   function beginWord(at) {
@@ -69,13 +72,23 @@ export function createGame({ now = () => 0 } = {}) {
     emit({ type: 'word', index });
   }
 
+  function openRecall() {
+    const bounds = recallBounds(words, roundStartIndex, index);
+    recall = buildRecall(words, bounds.start, bounds.end, random);
+  }
+
+  function recallLocked() {
+    return Boolean(recall && recall.phase !== 'ready');
+  }
+
   function finish() {
     status = STATUS.FINISHED;
     responded = false;
     missReason = null;
     missedKey = null;
     held = false;
-    emit({ type: 'finish', score, maxStreak });
+    openRecall();
+    emit({ type: 'finish', score, maxStreak, recall: Boolean(recall) });
   }
 
   function advance(at) {
@@ -93,7 +106,8 @@ export function createGame({ now = () => 0 } = {}) {
       responded = false;
       missReason = null;
       missedKey = null;
-      emit({ type: 'break', completed: doneInRound });
+      openRecall();
+      emit({ type: 'break', completed: doneInRound, recall: Boolean(recall) });
       return;
     }
 
@@ -170,6 +184,7 @@ export function createGame({ now = () => 0 } = {}) {
 
   function start(at = now()) {
     if (!words.length) return false;
+    if (recallLocked()) return false;
     if (status !== STATUS.IDLE && status !== STATUS.FINISHED) return false;
     resetStats();
     index = 0;
@@ -207,6 +222,8 @@ export function createGame({ now = () => 0 } = {}) {
 
   function continueRound(at = now()) {
     if (status !== STATUS.BREAK) return false;
+    if (recallLocked()) return false;
+    recall = null;
     if (index >= words.length) {
       finish();
       return true;
@@ -241,6 +258,35 @@ export function createGame({ now = () => 0 } = {}) {
     if (!held) return false;
     freezeUntil = at + freezeRemaining;
     held = false;
+    return true;
+  }
+
+  function answerRecall(choiceId) {
+    if (!recall || recall.phase !== 'ask') return false;
+    const id = Number(choiceId);
+    const choice = recall.choices.find((item) => item.id === id);
+    if (!choice) return false;
+
+    if (choice.correct) {
+      score += RECALL_BONUS;
+      recall.phase = 'ready';
+      recall.correct = true;
+      recall.points = RECALL_BONUS;
+      emit({ type: 'recall-hit', points: RECALL_BONUS, score, maxStreak });
+      return true;
+    }
+
+    recall.phase = 'reveal';
+    recall.correct = false;
+    recall.points = 0;
+    emit({ type: 'recall-miss' });
+    return true;
+  }
+
+  function acknowledgeRecall() {
+    if (!recall || recall.phase !== 'reveal') return false;
+    recall.phase = 'ready';
+    emit({ type: 'recall-ready' });
     return true;
   }
 
@@ -321,7 +367,19 @@ export function createGame({ now = () => 0 } = {}) {
       freezeLeftMs,
       articleLabel: labelText,
       word,
+      recall: publicRecall(),
       config: { ...config },
+    };
+  }
+
+  function publicRecall() {
+    if (!recall) return null;
+    return {
+      phase: recall.phase,
+      choices: recall.choices.map(({ id, label }) => ({ id, label })),
+      sentence: recall.phase === 'reveal' ? recall.sentence : null,
+      correct: recall.correct,
+      points: recall.points,
     };
   }
 
@@ -335,6 +393,9 @@ export function createGame({ now = () => 0 } = {}) {
     jumpTo,
     hold,
     release,
+    answerRecall,
+    acknowledgeRecall,
+    recallLocked,
     press,
     tick,
     snapshot,
