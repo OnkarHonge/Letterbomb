@@ -1,6 +1,72 @@
 import { must, setText } from './dom.js';
 import { scrollTopToReveal } from './scroll.js';
 
+function recallMount(prefix) {
+  return {
+    root: must(`${prefix}-recall`),
+    choices: must(`${prefix}-choices`),
+    sentence: must(`${prefix}-sentence`),
+    ack: must(`${prefix}-ack`),
+    hint: must(`${prefix}-recall-hint`),
+  };
+}
+
+function syncRecall(mount, snap, state, keyName) {
+  const recall = snap.recall;
+  const asking = Boolean(recall && recall.phase !== 'ready');
+  mount.root.hidden = !asking;
+  if (!asking) {
+    state[keyName] = '';
+    return;
+  }
+
+  const revealing = recall.phase === 'reveal';
+  mount.choices.hidden = revealing;
+  mount.sentence.hidden = !revealing;
+  mount.ack.hidden = !revealing;
+
+  const key = [
+    snap.epoch,
+    snap.status,
+    snap.index,
+    recall.phase,
+    recall.choices.map((choice) => `${choice.id}:${choice.label}`).join('|'),
+  ].join(':');
+  if (key === state[keyName]) return;
+  state[keyName] = key;
+
+  if (!revealing) {
+    mount.choices.replaceChildren();
+    for (const choice of recall.choices) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn recall-choice';
+      button.dataset.recall = String(choice.id);
+      button.textContent = choice.label;
+      mount.choices.append(button);
+    }
+    mount.sentence.replaceChildren();
+    return;
+  }
+
+  fillSentence(mount.sentence, recall.sentence || []);
+}
+
+function fillSentence(node, parts) {
+  node.replaceChildren();
+  parts.forEach((part, index) => {
+    if (index > 0) node.append(' ');
+    if (!part.marked) {
+      node.append(part.text);
+      return;
+    }
+    const mark = document.createElement('mark');
+    mark.className = 'recall-mark';
+    mark.textContent = part.text;
+    node.append(mark);
+  });
+}
+
 function fillWord(node, word) {
   node.replaceChildren();
   if (!word) return;
@@ -35,7 +101,18 @@ export function createPainter() {
   const idleBest = must('idle-best');
   const idleRound = must('idle-round');
   const idleStart = must('idle-start');
+  const breakTitle = must('break-title');
   const breakCopy = must('break-copy');
+  const breakRest = must('break-rest');
+  const breakResult = must('break-result');
+  const breakContinue = must('break-continue');
+  const breakHint = must('break-hint');
+  const doneTitle = must('done-title');
+  const doneSummary = must('done-summary');
+  const doneResult = must('done-result');
+  const doneAgain = must('done-again');
+  const breakRecall = recallMount('break');
+  const doneRecall = recallMount('done');
   const doneScore = must('done-score');
   const doneStreak = must('done-streak');
   const doneAccuracy = must('done-accuracy');
@@ -75,6 +152,8 @@ export function createPainter() {
     theme: '',
     scale: '',
     popToken: 0,
+    breakRecall: '',
+    doneRecall: '',
   };
 
   function renderSlice(words, start, end) {
@@ -255,12 +334,63 @@ export function createPainter() {
     if (config.roundSize > 0) {
       setText(
         idleRound,
-        `A breath screen shows up every ${config.roundSize} words. Set that to 0 in Tune to read straight through.`,
+        `A breath screen shows up every ${config.roundSize} words and asks which word you just read.`,
       );
     } else {
-      setText(idleRound, 'Rounds are off, so the article runs straight through.');
+      setText(idleRound, 'Rounds are off, so the article runs straight through. One recall question waits at the end.');
     }
-    setText(breakCopy, `You finished a round of ${config.roundSize} words. Your streak stays. This is a pause, not a penalty.`);
+    const finishedRound = snap.status === 'break'
+      ? Math.max(0, snap.index - snap.roundStart)
+      : config.roundSize;
+    setText(
+      breakCopy,
+      `You finished a round of ${finishedRound} words. Your streak stays. This is a pause, not a penalty.`,
+    );
+    syncRecall(breakRecall, snap, state, 'breakRecall');
+    syncRecall(doneRecall, snap, state, 'doneRecall');
+    const asking = Boolean(snap.recall && snap.recall.phase !== 'ready');
+    const revealing = snap.recall?.phase === 'reveal';
+    breakRest.hidden = snap.status === 'break' && asking;
+    doneSummary.hidden = snap.status === 'finished' && asking;
+    breakContinue.disabled = asking;
+    doneAgain.disabled = asking;
+    if (snap.status === 'break') {
+      setText(
+        breakTitle,
+        revealing
+          ? 'That word was here.'
+          : asking
+            ? 'Which one was in the last round?'
+            : 'Breath',
+      );
+    }
+    if (snap.status === 'finished') {
+      setText(
+        doneTitle,
+        revealing
+          ? 'That word was here.'
+          : asking
+            ? 'Which one was in the last round?'
+            : 'Done',
+      );
+    }
+    const recallHint = revealing
+      ? 'Got it or Space unlocks the rest.'
+      : 'Pick the word. Space waits.';
+    setText(breakRecall.hint, recallHint);
+    setText(doneRecall.hint, recallHint);
+    const showResult = Boolean(snap.recall && snap.recall.phase === 'ready');
+    const resultText = !showResult
+      ? ''
+      : snap.recall.correct
+        ? `Caught it · +${snap.recall.points}`
+        : 'Missed this one. Streak unchanged.';
+    breakResult.hidden = !(showResult && snap.status === 'break');
+    doneResult.hidden = !(showResult && snap.status === 'finished');
+    breakResult.classList.toggle('recall-missed', showResult && !snap.recall.correct);
+    doneResult.classList.toggle('recall-missed', showResult && !snap.recall.correct);
+    setText(breakResult, resultText);
+    setText(doneResult, resultText);
 
     const best = extras?.best;
     const hasBest = Boolean(best && (best.streak > 0 || best.score > 0));

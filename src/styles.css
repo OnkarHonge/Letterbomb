@@ -445,6 +445,42 @@ body.is-paused .word { cursor: pointer; }
 .steps li { margin: 6px 0; }
 .hint { margin-top: 8px; color: var(--muted); font-size: 0.85rem; }
 .record { margin: 0 0 12px; color: var(--hit); font-weight: 800; }
+.recall-missed { color: var(--muted); font-weight: 700; }
+
+.recall:not([hidden]) {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.recall-choices { display: grid; gap: 8px; }
+.btn.recall-choice {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.25;
+  font-family: var(--font-read);
+  font-size: 1.2rem;
+}
+.recall-sentence {
+  margin: 0;
+  font-family: var(--font-read);
+  font-size: 1.08rem;
+  line-height: 1.45;
+}
+.recall-mark {
+  background: none;
+  color: var(--accent);
+  font-weight: 800;
+}
+#break-rest:not([hidden]) {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+#done-summary { margin-top: 8px; }
+#done-lead { margin-top: 8px; }
 
 .stats {
   display: grid;

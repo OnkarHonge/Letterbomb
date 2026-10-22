@@ -97,18 +97,36 @@ function handleEvent(event) {
   if (event.type === 'hit') {
     if (event.streak % 10 !== 0) sound.hit(event.streak);
     painter.pop(`+${event.points}`, 'hit');
-    let changed = false;
-    if (event.score > best.score) {
-      if (best.score > 0) records.score = true;
-      best.score = event.score;
-      changed = true;
-    }
+    rememberScore(event.score);
     if (event.maxStreak > best.streak) {
       if (best.streak > 0) records.streak = true;
       best.streak = event.maxStreak;
-      changed = true;
+      scheduleSave();
     }
-    if (changed) scheduleSave();
+    return;
+  }
+
+  if (event.type === 'recall-hit') {
+    sound.recallHit();
+    painter.pop(`+${event.points}`, 'hit');
+    rememberScore(event.score);
+    setText(live, `Caught it. Plus ${event.points}.`);
+    return;
+  }
+
+  if (event.type === 'recall-miss') {
+    sound.recallMiss();
+    setText(live, 'Not that one. The sentence is on screen.');
+    return;
+  }
+
+  if (event.type === 'recall-ready') {
+    setText(
+      live,
+      game.status === 'finished'
+        ? 'Article complete.'
+        : 'Round complete. Press space to continue.',
+    );
     return;
   }
 
@@ -136,7 +154,12 @@ function handleEvent(event) {
   }
 
   if (event.type === 'break') {
-    setText(live, 'Round complete. Press space to continue.');
+    setText(
+      live,
+      event.recall
+        ? 'Round complete. Which word was in that round?'
+        : 'Round complete. Press space to continue.',
+    );
     return;
   }
 
@@ -144,7 +167,10 @@ function handleEvent(event) {
     const notes = [];
     if (records.streak) notes.push('New best streak.');
     if (records.score) notes.push('New best score.');
-    setText(live, ['Article complete.', ...notes].join(' '));
+    const lead = event.recall
+      ? 'Article complete. Which word was in the last round?'
+      : 'Article complete.';
+    setText(live, [lead, ...notes].join(' '));
     scheduleSave();
     return;
   }
@@ -222,9 +248,21 @@ function loadArticle(next) {
   drain();
 }
 
+function rememberScore(score) {
+  if (score <= best.score) return;
+  if (best.score > 0) records.score = true;
+  best.score = score;
+  scheduleSave();
+}
+
 function onSpace() {
   sound.unlock();
   const at = performance.now();
+  if (game.acknowledgeRecall()) {
+    drain(at);
+    return;
+  }
+  if (game.recallLocked()) return;
   if (game.status === 'idle' || game.status === 'finished') game.start(at);
   else if (game.status === 'paused') game.resume(at);
   else if (game.status === 'break') game.continueRound(at);
@@ -297,6 +335,24 @@ must('done-again').addEventListener('click', (event) => {
 
 must('done-article').addEventListener('click', (event) => {
   openModal(modalLibrary, event.currentTarget);
+});
+
+must('overlay').addEventListener('click', (event) => {
+  const choice = event.target.closest('[data-recall]');
+  if (choice) {
+    sound.unlock();
+    if (!game.answerRecall(Number(choice.dataset.recall))) return;
+    drain();
+    if (game.snapshot().recall?.phase === 'reveal') {
+      const ack = document.getElementById(game.status === 'break' ? 'break-ack' : 'done-ack');
+      ack?.focus();
+    }
+    return;
+  }
+  if (event.target.closest('.recall-ack')) {
+    sound.unlock();
+    if (game.acknowledgeRecall()) drain();
+  }
 });
 
 must('karaoke').addEventListener('click', (event) => {

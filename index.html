@@ -104,6 +104,7 @@
               <li>Read the highlighted word.</li>
               <li>Press its first letter before the bar runs out.</li>
               <li>Hits build a streak. A miss freezes the board, then you continue.</li>
+              <li>Each breath asks which word you just read.</li>
             </ol>
             <button type="button" id="idle-start" class="btn btn-primary btn-large">Start</button>
             <p class="hint">Space also starts, pauses, and resumes.</p>
@@ -111,24 +112,42 @@
             <p id="idle-best" class="hint" hidden></p>
           </div>
           <div id="panel-break" class="panel" hidden>
-            <h2>Breath</h2>
-            <p id="break-copy"></p>
-            <button type="button" id="break-continue" class="btn btn-primary btn-large">Continue</button>
-            <p class="hint">Space continues. Your streak is still there.</p>
+            <h2 id="break-title">Breath</h2>
+            <div id="break-recall" class="recall" hidden>
+              <div id="break-choices" class="recall-choices" role="group" aria-label="Which one was in the last round?"></div>
+              <p id="break-sentence" class="recall-sentence" hidden></p>
+              <button type="button" id="break-ack" class="btn btn-block recall-ack" hidden>Got it</button>
+              <p id="break-recall-hint" class="hint"></p>
+            </div>
+            <div id="break-rest">
+              <p id="break-copy"></p>
+              <p id="break-result" class="record" hidden></p>
+              <button type="button" id="break-continue" class="btn btn-primary btn-large">Continue</button>
+              <p id="break-hint" class="hint">Space continues. Your streak is still there.</p>
+            </div>
           </div>
           <div id="panel-done" class="panel" hidden>
-            <h2>Done</h2>
-            <p>You reached the end of this article.</p>
-            <dl class="stats">
-              <div><dt>Score</dt><dd id="done-score">0</dd></div>
-              <div><dt>Best streak</dt><dd id="done-streak">0</dd></div>
-              <div><dt>Accuracy</dt><dd id="done-accuracy">—</dd></div>
-              <div><dt>Reaction</dt><dd id="done-reaction">—</dd></div>
-            </dl>
-            <p id="done-note" class="record" hidden></p>
-            <div class="btn-row">
-              <button type="button" id="done-again" class="btn btn-primary">Read again</button>
-              <button type="button" id="done-article" class="btn">Change article</button>
+            <h2 id="done-title">Done</h2>
+            <div id="done-recall" class="recall" hidden>
+              <div id="done-choices" class="recall-choices" role="group" aria-label="Which one was in the last round?"></div>
+              <p id="done-sentence" class="recall-sentence" hidden></p>
+              <button type="button" id="done-ack" class="btn btn-block recall-ack" hidden>Got it</button>
+              <p id="done-recall-hint" class="hint"></p>
+            </div>
+            <div id="done-summary">
+              <p id="done-lead">You reached the end of this article.</p>
+              <dl class="stats">
+                <div><dt>Score</dt><dd id="done-score">0</dd></div>
+                <div><dt>Best streak</dt><dd id="done-streak">0</dd></div>
+                <div><dt>Accuracy</dt><dd id="done-accuracy">—</dd></div>
+                <div><dt>Reaction</dt><dd id="done-reaction">—</dd></div>
+              </dl>
+              <p id="done-note" class="record" hidden></p>
+              <p id="done-result" class="record" hidden></p>
+              <div class="btn-row">
+                <button type="button" id="done-again" class="btn btn-primary">Read again</button>
+                <button type="button" id="done-article" class="btn">Change article</button>
+              </div>
             </div>
           </div>
         </div>
@@ -190,7 +209,7 @@
       <label class="field">
         <span class="field-top"><span>Round length</span><b id="cfg-round-val">40 words</b></span>
         <input id="cfg-round" type="range" min="0" max="200" step="5" value="40">
-        <span class="field-help">0 reads the whole article with no breath screen.</span>
+        <span class="field-help">0 reads the whole article with no breath screen. A recall question still waits at the end.</span>
       </label>
 
       <h3>What you press</h3>

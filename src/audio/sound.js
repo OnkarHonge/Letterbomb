@@ -62,6 +62,20 @@ export function createSound() {
         // Ignore audio graph errors.
       }
     },
+    recallHit() {
+      try {
+        tone({ frequency: 640, endFrequency: 880, duration: 0.12, type: 'triangle', gain: 0.06 });
+      } catch {
+        // Ignore audio graph errors.
+      }
+    },
+    recallMiss() {
+      try {
+        tone({ frequency: 240, endFrequency: 180, duration: 0.12, type: 'sine', gain: 0.04 });
+      } catch {
+        // Ignore audio graph errors.
+      }
+    },
     milestone() {
       try {
         [523.25, 659.25, 783.99].forEach((frequency, index) => {
