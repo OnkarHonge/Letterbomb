@@ -1,5 +1,5 @@
 export const LIMITS = {
-  wpm: [60, 800],
+  wpm: [10, 800],
   forgivenessMs: [0, 800],
   freezeSec: [0, 3],
   punctuationMultiplier: [1, 3],
@@ -27,6 +27,30 @@ export const DEFAULT_CONFIG = {
 };
 
 export const PACE_PRESETS = {
+  linger: {
+    label: 'Linger',
+    wpm: 10,
+    forgivenessMs: 800,
+    freezeSec: 0.5,
+    showTargetHud: true,
+    advanceOnHit: true,
+  },
+  study: {
+    label: 'Study',
+    wpm: 20,
+    forgivenessMs: 800,
+    freezeSec: 0.5,
+    showTargetHud: true,
+    advanceOnHit: true,
+  },
+  read: {
+    label: 'Read',
+    wpm: 40,
+    forgivenessMs: 800,
+    freezeSec: 0.5,
+    showTargetHud: true,
+    advanceOnHit: true,
+  },
   warmup: {
     label: 'Warmup',
     wpm: 70,
@@ -49,6 +73,18 @@ export const PACE_PRESETS = {
     showTargetHud: true,
   },
 };
+
+/** Fields a Tune pace button writes. Other settings stay as they are. */
+export function pacePatch(preset) {
+  const patch = {
+    wpm: preset.wpm,
+    forgivenessMs: preset.forgivenessMs,
+    freezeSec: preset.freezeSec,
+    showTargetHud: preset.showTargetHud,
+  };
+  if (preset.advanceOnHit !== undefined) patch.advanceOnHit = preset.advanceOnHit;
+  return patch;
+}
 
 const VIEW_MODES = new Set(['karaoke', 'rsvp']);
 const FILTERS = new Set(['all', 'long', 'vowel', 'capital']);

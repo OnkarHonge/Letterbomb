@@ -178,15 +178,18 @@
 
       <h3>Pace</h3>
       <div class="pace-grid">
+        <button type="button" class="btn" data-pace="linger">Linger</button>
+        <button type="button" class="btn" data-pace="study">Study</button>
+        <button type="button" class="btn" data-pace="read">Read</button>
         <button type="button" class="btn" data-pace="warmup">Warmup</button>
         <button type="button" class="btn" data-pace="flow">Flow</button>
         <button type="button" class="btn" data-pace="reflex">Reflex</button>
       </div>
-      <p class="field-help">Starting points. After you pick one, the sliders still win.</p>
+      <p class="field-help">Linger, Study, and Read keep a new word up long enough to understand it. A correct letter still moves on. After you pick one, the sliders still win.</p>
 
       <label class="field">
         <span class="field-top"><span>Reading speed</span><b id="cfg-wpm-val">150 WPM</b></span>
-        <input id="cfg-wpm" type="range" min="60" max="800" step="10" value="150">
+        <input id="cfg-wpm" type="range" min="10" max="800" step="10" value="150">
         <span class="field-help">How fast the highlight moves. Lower is calmer.</span>
       </label>
       <label class="field">

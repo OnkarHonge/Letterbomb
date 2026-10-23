@@ -96,8 +96,8 @@ describe('scoring', () => {
 describe('sanitizeConfig', () => {
   it('keeps defaults and clamps bad values', () => {
     expect(sanitizeConfig(null).wpm).toBe(DEFAULT_CONFIG.wpm);
-    expect(sanitizeConfig({ wpm: 20, theme: 'cyberpunk', sound: 'false' })).toMatchObject({
-      wpm: 60,
+    expect(sanitizeConfig({ wpm: 1, theme: 'cyberpunk', sound: 'false' })).toMatchObject({
+      wpm: 10,
       theme: 'signal',
       sound: true,
     });

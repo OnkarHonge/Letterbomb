@@ -1,4 +1,4 @@
-import { PACE_PRESETS, DEFAULT_CONFIG } from '../engine/config.js';
+import { PACE_PRESETS, DEFAULT_CONFIG, pacePatch } from '../engine/config.js';
 import { wordDeadlineMs } from '../engine/timing.js';
 import { must, setText } from './dom.js';
 
@@ -111,12 +111,7 @@ export function bindSettings(game, { onChange }) {
     if (!preset) continue;
     button.textContent = `${preset.label} · ${preset.wpm} WPM`;
     button.addEventListener('click', () => {
-      game.setConfig({
-        wpm: preset.wpm,
-        forgivenessMs: preset.forgivenessMs,
-        freezeSec: preset.freezeSec,
-        showTargetHud: preset.showTargetHud,
-      });
+      game.setConfig(pacePatch(preset));
       sync();
       onChange();
     });

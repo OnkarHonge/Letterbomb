@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PACE_PRESETS, pacePatch } from '../src/engine/config.js';
 import { createGame, STATUS } from '../src/engine/game.js';
 import { recallBounds, selectTarget } from '../src/engine/recall.js';
 import { RECALL_BONUS } from '../src/engine/scoring.js';
@@ -386,6 +387,60 @@ describe('game', () => {
     expect(game.acknowledgeRecall()).toBe(true);
     expect(game.start(at + 50)).toBe(true);
     expect(game.snapshot()).toMatchObject({ status: STATUS.PLAYING, score: 0, recall: null });
+  });
+
+  it('holds a Linger word for the full window, then freezes briefly', () => {
+    const game = setup('Concept is', { roundSize: 0 });
+    game.setConfig(pacePatch(PACE_PRESETS.linger));
+    game.start(0);
+
+    expect(game.snapshot(0).deadlineMs).toBe(6800);
+    game.tick(6799);
+    expect(game.snapshot(6799)).toMatchObject({ status: STATUS.PLAYING, index: 0, misses: 0 });
+
+    game.tick(6800);
+    expect(game.snapshot(6800)).toMatchObject({
+      status: STATUS.FROZEN,
+      index: 0,
+      misses: 1,
+      missReason: 'timeout',
+      freezeLeftMs: 500,
+    });
+    game.tick(7299);
+    expect(game.status).toBe(STATUS.FROZEN);
+    game.tick(7300);
+    expect(game.snapshot(7300)).toMatchObject({ status: STATUS.PLAYING, index: 1, misses: 1 });
+  });
+
+  it('moves on from a learning pace as soon as the letter is right', () => {
+    const game = setup('Concept is', { advanceOnHit: false, roundSize: 0 });
+    game.setConfig(pacePatch(PACE_PRESETS.study));
+    expect(game.config.advanceOnHit).toBe(true);
+
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(3800);
+    expect(game.press('c', 250)).toBe(true);
+    expect(game.snapshot(250)).toMatchObject({ status: STATUS.PLAYING, index: 1, hits: 1 });
+  });
+
+  it('gives a sentence ending the longer Linger window', () => {
+    const game = setup('Idea.', { roundSize: 0, punctuationMultiplier: 1.5 });
+    game.setConfig(pacePatch(PACE_PRESETS.linger));
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(9800);
+    game.tick(9799);
+    expect(game.snapshot(9799)).toMatchObject({ status: STATUS.PLAYING, index: 0 });
+  });
+
+  it('leaves Advance on a hit alone when the pace is Warmup', () => {
+    const game = setup('Alpha Beta', { advanceOnHit: false, roundSize: 0 });
+    game.setConfig(pacePatch(PACE_PRESETS.warmup));
+    expect(game.config.advanceOnHit).toBe(false);
+    expect(game.config).toMatchObject({ wpm: 70, forgivenessMs: 600, showTargetHud: true });
+
+    game.start(0);
+    expect(game.press('a', 40)).toBe(true);
+    expect(game.snapshot(40)).toMatchObject({ status: STATUS.PLAYING, index: 0, hits: 1 });
   });
 
   it('passes over punctuation-only tokens', () => {
