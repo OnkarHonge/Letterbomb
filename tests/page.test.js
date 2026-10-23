@@ -3,7 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, LIMITS, THEMES, VIEW_MODES } from '../src/engine/config.js';
 import { FILTERS, LONG_WORD_LETTERS, VOWELS } from '../src/engine/parseText.js';
-import { missRule, pauseRule } from '../src/ui/paint.js';
+import {
+  RECALL_QUESTION,
+  missRule,
+  pauseRule,
+  recallHeading,
+  recallPrompt,
+  roundNote,
+} from '../src/ui/paint.js';
 import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
@@ -46,6 +53,11 @@ describe('page and engine', () => {
     expect(html).toContain(`>${Math.round(DEFAULT_CONFIG.fontScale * 100)}%<`);
     expect(html).toContain(missRule(DEFAULT_CONFIG.freezeSec));
     expect(html).toContain(pauseRule(false));
+    expect(html).toContain('Each breath fills a blank in a sentence you just read.');
+    expect(html.split(RECALL_QUESTION).length - 1).toBe(2);
+    expect(html).toContain(
+      '0 reads the whole article with no breath screen. A fill-in question still waits at the end.',
+    );
     expect(html).toContain('Extra time on words with punctuation.');
     expect(html).toContain('Extra time on the first word after a window closes.');
     expect(html).toContain('plus your all-time streak');
@@ -132,5 +144,19 @@ describe('page and engine', () => {
     expect(pauseRule(true)).toBe(
       'That letter already counted. Resume moves on. Click a word to move the highlight.',
     );
+  });
+
+  it('describes a breath the way the board asks it', () => {
+    expect(roundNote(40)).toBe(
+      'A breath screen shows up every 40 words and asks you to fill a blank from that stretch.',
+    );
+    expect(roundNote(0)).toBe(
+      'Rounds are off, so the article runs straight through. One fill-in question waits at the end.',
+    );
+    expect(recallHeading('ask')).toBe('Which word was here?');
+    expect(recallHeading('reveal')).toBe('That word was here.');
+    expect(recallHeading('ready')).toBe('');
+    expect(recallPrompt(false)).toBe('Round complete. Which word fills the blank?');
+    expect(recallPrompt(true)).toBe('Article complete. Which word fills the blank?');
   });
 });

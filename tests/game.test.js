@@ -5,8 +5,18 @@ import { recallBounds, selectTarget } from '../src/engine/recall.js';
 import { RECALL_BONUS } from '../src/engine/scoring.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
-function setup(text, config = {}) {
-  const game = createGame();
+const CLOZE = 'Bravo quietly rests. Delta gently stays. Foxtrot softly leaves. Hotel calmly waits.';
+
+function pressLetters(game, letters, at = 0) {
+  for (const letter of letters) {
+    at += 40;
+    expect(game.press(letter, at)).toBe(true);
+  }
+  return at;
+}
+
+function setup(text, config = {}, random = () => 0) {
+  const game = createGame({ random });
   game.setConfig({
     wpm: 600,
     forgivenessMs: 0,
@@ -259,39 +269,33 @@ describe('game', () => {
   });
 
   it('holds the breath screen until the recall is answered', () => {
-    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel', { roundSize: 4 });
+    const game = setup(CLOZE, { roundSize: 6 });
     game.start(0);
-    let at = 0;
-    for (const letter of ['a', 'b', 'c', 'd']) {
-      at += 40;
-      expect(game.press(letter, at)).toBe(true);
-    }
+    const at = pressLetters(game, ['b', 'q', 'r', 'd', 'g', 's']);
 
     expect(game.status).toBe(STATUS.BREAK);
-    expect(selectTarget(game.words, 0, 4).word.original).toBe('bravo');
+    expect(selectTarget(game.words, 0, 6, () => 0).word.original).toBe('quietly');
     const snap = game.snapshot(at);
     expect(snap.recall.phase).toBe('ask');
-    expect(snap.recall.sentence).toBeNull();
     expect(snap.recall.choices).toHaveLength(3);
-    expect(snap.recall.choices[0]).toEqual({
-      id: expect.any(Number),
-      label: expect.any(String),
-    });
+    expect(snap.recall.sentence.map((part) => part.text)).toEqual(['Bravo', '_____', 'rests.']);
+    expect(snap.recall.sentence.some((part) => part.blank)).toBe(true);
+    expect(snap.recall.sentence.some((part) => part.text === 'quietly')).toBe(false);
     expect(game.answerRecall(99)).toBe(false);
     expect(game.acknowledgeRecall()).toBe(false);
     expect(game.snapshot().recall.phase).toBe('ask');
     expect(game.continueRound(at)).toBe(false);
     expect(game.start(at)).toBe(false);
 
-    const wrong = snap.recall.choices.find((choice) => choice.label !== 'bravo');
-    expect(['echo', 'foxtrot', 'golf', 'hotel']).toContain(wrong.label);
+    const wrong = snap.recall.choices.find((choice) => choice.label !== 'quietly');
+    expect(['gently', 'stays']).toContain(wrong.label);
     expect(game.answerRecall(wrong.id)).toBe(true);
     expect(game.answerRecall(wrong.id)).toBe(false);
     const revealed = game.snapshot();
-    expect(revealed).toMatchObject({ score: 400, streak: 4, misses: 0 });
+    expect(revealed).toMatchObject({ score: 600, streak: 6, misses: 0 });
     expect(revealed.recall.phase).toBe('reveal');
-    expect(revealed.recall.sentence.some((part) => part.marked && part.text === 'bravo')).toBe(true);
-    expect(revealed.recall.sentence.map((part) => part.text)).not.toContain('echo');
+    expect(revealed.recall.sentence.some((part) => part.marked && part.text === 'quietly')).toBe(true);
+    expect(revealed.recall.sentence.map((part) => part.text)).not.toContain('Foxtrot');
     expect(game.continueRound(at)).toBe(false);
     expect(game.acknowledgeRecall()).toBe(true);
     expect(game.continueRound(at + 50)).toBe(true);
@@ -300,20 +304,16 @@ describe('game', () => {
   });
 
   it('adds the recall bonus and leaves the streak alone', () => {
-    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel', { roundSize: 4 });
+    const game = setup(CLOZE, { roundSize: 6 });
     game.start(0);
-    let at = 0;
-    for (const letter of ['a', 'b', 'c', 'd']) {
-      at += 40;
-      game.press(letter, at);
-    }
-    const choice = game.snapshot().recall.choices.find((item) => item.label === 'bravo');
+    const at = pressLetters(game, ['b', 'q', 'r', 'd', 'g', 's']);
+    const choice = game.snapshot().recall.choices.find((item) => item.label === 'quietly');
     expect(game.answerRecall(choice.id)).toBe(true);
     expect(game.acknowledgeRecall()).toBe(false);
     expect(game.snapshot()).toMatchObject({
-      score: 400 + RECALL_BONUS,
-      streak: 4,
-      hits: 4,
+      score: 600 + RECALL_BONUS,
+      streak: 6,
+      hits: 6,
       misses: 0,
       accuracy: 100,
     });
@@ -322,38 +322,32 @@ describe('game', () => {
   });
 
   it('asks about the last stretch when the article ends inside a round', () => {
-    const text = 'alpha bravo charlie delta echo foxtrot golf hotel';
-    const game = setup(text, { roundSize: 4 });
+    const game = setup(CLOZE, { roundSize: 6 });
     game.start(0);
-    let at = 0;
-    const press = (letter) => {
-      at += 40;
-      expect(game.press(letter, at)).toBe(true);
-    };
-
-    for (const letter of ['a', 'b', 'c', 'd']) press(letter);
-    const first = game.snapshot().recall.choices.find((choice) => choice.label === 'bravo');
+    let at = pressLetters(game, ['b', 'q', 'r', 'd', 'g', 's']);
+    const first = game.snapshot().recall.choices.find((choice) => choice.label === 'quietly');
     expect(game.answerRecall(first.id)).toBe(true);
     expect(game.continueRound(at + 20)).toBe(true);
 
-    for (const letter of ['e', 'f', 'g', 'h']) press(letter);
+    at = pressLetters(game, ['f', 's', 'l', 'h', 'c', 'w'], at);
     expect(game.status).toBe(STATUS.FINISHED);
-    expect(selectTarget(game.words, 4, 8).word.original).toBe('foxtrot');
+    expect(selectTarget(game.words, 6, 12, () => 0).word.original).toBe('Foxtrot');
     expect(game.snapshot().recall.phase).toBe('ask');
     const labels = game.snapshot().recall.choices.map((choice) => choice.label);
-    expect(labels).toContain('foxtrot');
+    expect(labels).toContain('Foxtrot');
     for (const label of labels) {
-      if (label !== 'foxtrot') expect(['alpha', 'bravo', 'charlie', 'delta']).toContain(label);
+      if (label !== 'Foxtrot') expect(['Delta', 'Stays']).toContain(label);
     }
+    expect(game.snapshot().recall.sentence.some((part) => part.blank && part.text === '_____')).toBe(true);
     expect(game.start(at)).toBe(false);
 
-    const right = game.snapshot().recall.choices.find((choice) => choice.label === 'foxtrot');
+    const right = game.snapshot().recall.choices.find((choice) => choice.label === 'Foxtrot');
     expect(game.answerRecall(right.id)).toBe(true);
     expect(game.snapshot()).toMatchObject({
       status: STATUS.FINISHED,
-      score: 800 + RECALL_BONUS * 2,
-      streak: 8,
-      hits: 8,
+      score: 1500 + RECALL_BONUS * 2,
+      streak: 12,
+      hits: 12,
       misses: 0,
       accuracy: 100,
     });
@@ -363,13 +357,9 @@ describe('game', () => {
   });
 
   it('drops an open recall when a new article is loaded', () => {
-    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel', { roundSize: 4 });
+    const game = setup(CLOZE, { roundSize: 6 });
     game.start(0);
-    let at = 0;
-    for (const letter of ['a', 'b', 'c', 'd']) {
-      at += 40;
-      game.press(letter, at);
-    }
+    pressLetters(game, ['b', 'q', 'r', 'd', 'g', 's']);
     expect(game.snapshot().recall.phase).toBe('ask');
     expect(game.load('Beta Gamma', 'Next')).toBe(2);
     expect(game.snapshot()).toMatchObject({
@@ -382,24 +372,21 @@ describe('game', () => {
   });
 
   it('asks once at the end when rounds are off', () => {
-    const game = setup('alpha bravo charlie delta echo foxtrot golf hotel');
+    const game = setup('Bravo quietly rests. Delta gently stays.');
     game.start(0);
-    let at = 0;
-    for (const letter of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
-      at += 40;
-      expect(game.press(letter, at)).toBe(true);
-    }
+    const at = pressLetters(game, ['b', 'q', 'r', 'd', 'g', 's']);
 
     expect(game.status).toBe(STATUS.FINISHED);
     const bounds = recallBounds(game.words, 0, game.words.length);
-    expect(selectTarget(game.words, bounds.start, bounds.end).word.original).toBe('foxtrot');
+    expect(selectTarget(game.words, bounds.start, bounds.end, () => 0).word.original).toBe('gently');
     expect(game.snapshot().recall.phase).toBe('ask');
+    expect(game.snapshot().recall.sentence.some((part) => part.blank)).toBe(true);
     expect(game.start(at)).toBe(false);
 
-    const wrong = game.snapshot().recall.choices.find((choice) => choice.label !== 'foxtrot');
-    expect(['alpha', 'bravo', 'charlie', 'delta']).toContain(wrong.label);
+    const wrong = game.snapshot().recall.choices.find((choice) => choice.label !== 'gently');
+    expect(['quietly', 'rests']).toContain(wrong.label);
     expect(game.answerRecall(wrong.id)).toBe(true);
-    expect(game.snapshot().score).toBe(800);
+    expect(game.snapshot().score).toBe(600);
     expect(game.start(at)).toBe(false);
     expect(game.acknowledgeRecall()).toBe(true);
     expect(game.start(at + 50)).toBe(true);
@@ -610,22 +597,18 @@ describe('opening pause', () => {
   });
 
   it('gives a longer window after the breath question is done', () => {
-    const game = setup('alpha bravo charlie delta echo foxtrot', { openingMultiplier: 2, roundSize: 4 });
+    const game = setup(CLOZE, { openingMultiplier: 2, roundSize: 6 });
     game.start(0);
-    let at = 0;
-    for (const letter of ['a', 'b', 'c', 'd']) {
-      at += 40;
-      expect(game.press(letter, at)).toBe(true);
-    }
+    const at = pressLetters(game, ['b', 'q', 'r', 'd', 'g', 's']);
     expect(game.status).toBe(STATUS.BREAK);
     expect(game.continueRound(at)).toBe(false);
 
-    const choice = game.snapshot().recall.choices.find((item) => item.label === 'bravo');
+    const choice = game.snapshot().recall.choices.find((item) => item.label === 'quietly');
     expect(game.answerRecall(choice.id)).toBe(true);
     expect(game.continueRound(at + 20)).toBe(true);
-    expect(game.snapshot(at + 20)).toMatchObject({ index: 4, deadlineMs: 200 });
-    expect(game.press('e', at + 60)).toBe(true);
-    expect(game.snapshot(at + 60)).toMatchObject({ index: 5, deadlineMs: 100 });
+    expect(game.snapshot(at + 20)).toMatchObject({ index: 6, deadlineMs: 200 });
+    expect(game.press('f', at + 60)).toBe(true);
+    expect(game.snapshot(at + 60)).toMatchObject({ index: 7, deadlineMs: 100 });
   });
 
   it('keeps the opening pause when a pace is chosen', () => {

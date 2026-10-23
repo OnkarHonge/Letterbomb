@@ -1,6 +1,6 @@
 import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, normalizeKey, parseText } from './parseText.js';
-import { buildRecall, recallBounds } from './recall.js';
+import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
 import { wordDeadlineMs } from './timing.js';
 
@@ -400,7 +400,11 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     return {
       phase: recall.phase,
       choices: recall.choices.map(({ id, label }) => ({ id, label })),
-      sentence: recall.phase === 'reveal' ? recall.sentence : null,
+      sentence: recall.phase === 'ask'
+        ? blankedSentence(recall.sentence)
+        : recall.phase === 'reveal'
+          ? recall.sentence
+          : null,
       correct: recall.correct,
       points: recall.points,
     };

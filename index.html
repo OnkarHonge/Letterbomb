@@ -104,7 +104,7 @@
               <li>Read the highlighted word.</li>
               <li>Press its first letter before the bar runs out.</li>
               <li id="idle-miss">Hits build a streak. A miss freezes the board, then you continue.</li>
-              <li>Each breath asks which word you just read.</li>
+              <li>Each breath fills a blank in a sentence you just read.</li>
             </ol>
             <button type="button" id="idle-start" class="btn btn-primary btn-large">Start</button>
             <p class="hint">Space also starts, pauses, and resumes.</p>
@@ -114,8 +114,8 @@
           <div id="panel-break" class="panel" hidden>
             <h2 id="break-title">Breath</h2>
             <div id="break-recall" class="recall" hidden>
-              <div id="break-choices" class="recall-choices" role="group" aria-label="Which one was in the last round?"></div>
               <p id="break-sentence" class="recall-sentence" hidden></p>
+              <div id="break-choices" class="recall-choices" role="group" aria-label="Which word fills the blank?"></div>
               <button type="button" id="break-ack" class="btn btn-block recall-ack" hidden>Got it</button>
               <p id="break-recall-hint" class="hint"></p>
             </div>
@@ -129,8 +129,8 @@
           <div id="panel-done" class="panel" hidden>
             <h2 id="done-title">Done</h2>
             <div id="done-recall" class="recall" hidden>
-              <div id="done-choices" class="recall-choices" role="group" aria-label="Which one was in the last round?"></div>
               <p id="done-sentence" class="recall-sentence" hidden></p>
+              <div id="done-choices" class="recall-choices" role="group" aria-label="Which word fills the blank?"></div>
               <button type="button" id="done-ack" class="btn btn-block recall-ack" hidden>Got it</button>
               <p id="done-recall-hint" class="hint"></p>
             </div>
@@ -217,7 +217,7 @@
       <label class="field">
         <span class="field-top"><span>Round length</span><b id="cfg-round-val">40 words</b></span>
         <input id="cfg-round" type="range" min="0" max="200" step="5" value="40">
-        <span class="field-help">0 reads the whole article with no breath screen. A recall question still waits at the end.</span>
+        <span class="field-help">0 reads the whole article with no breath screen. A fill-in question still waits at the end.</span>
       </label>
 
       <h3>What you press</h3>

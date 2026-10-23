@@ -13,6 +13,25 @@ export function pauseRule(responded) {
     : 'This word starts fresh when you resume. Click a word to move the highlight.';
 }
 
+export const RECALL_QUESTION = 'Which word fills the blank?';
+
+export function roundNote(roundSize) {
+  return roundSize > 0
+    ? `A breath screen shows up every ${roundSize} words and asks you to fill a blank from that stretch.`
+    : 'Rounds are off, so the article runs straight through. One fill-in question waits at the end.';
+}
+
+export function recallHeading(phase) {
+  if (phase === 'reveal') return 'That word was here.';
+  if (phase === 'ask') return 'Which word was here?';
+  return '';
+}
+
+export function recallPrompt(finished) {
+  const lead = finished ? 'Article complete.' : 'Round complete.';
+  return `${lead} ${RECALL_QUESTION}`;
+}
+
 function recallMount(prefix) {
   return {
     root: must(`${prefix}-recall`),
@@ -34,7 +53,7 @@ function syncRecall(mount, snap, state, keyName) {
 
   const revealing = recall.phase === 'reveal';
   mount.choices.hidden = revealing;
-  mount.sentence.hidden = !revealing;
+  mount.sentence.hidden = false;
   mount.ack.hidden = !revealing;
 
   const key = [
@@ -43,12 +62,13 @@ function syncRecall(mount, snap, state, keyName) {
     snap.index,
     recall.phase,
     recall.choices.map((choice) => `${choice.id}:${choice.label}`).join('|'),
+    (recall.sentence || []).map((part) => `${part.blank ? '_' : ''}${part.marked ? '*' : ''}${part.text}`).join(' '),
   ].join(':');
   if (key === state[keyName]) return;
   state[keyName] = key;
 
+  mount.choices.replaceChildren();
   if (!revealing) {
-    mount.choices.replaceChildren();
     for (const choice of recall.choices) {
       const button = document.createElement('button');
       button.type = 'button';
@@ -57,10 +77,7 @@ function syncRecall(mount, snap, state, keyName) {
       button.textContent = choice.label;
       mount.choices.append(button);
     }
-    mount.sentence.replaceChildren();
-    return;
   }
-
   fillSentence(mount.sentence, recall.sentence || []);
 }
 
@@ -68,6 +85,17 @@ function fillSentence(node, parts) {
   node.replaceChildren();
   parts.forEach((part, index) => {
     if (index > 0) node.append(' ');
+    if (part.blank) {
+      if (part.lead) node.append(part.lead);
+      const blank = document.createElement('span');
+      blank.className = 'recall-blank';
+      blank.setAttribute('role', 'img');
+      blank.setAttribute('aria-label', 'blank');
+      blank.textContent = part.text;
+      node.append(blank);
+      if (part.trail) node.append(part.trail);
+      return;
+    }
     if (!part.marked) {
       node.append(part.text);
       return;
@@ -347,14 +375,7 @@ export function createPainter() {
     panelDone.hidden = snap.status !== 'finished';
     idleStart.disabled = snap.total === 0;
 
-    if (config.roundSize > 0) {
-      setText(
-        idleRound,
-        `A breath screen shows up every ${config.roundSize} words and asks which word you just read.`,
-      );
-    } else {
-      setText(idleRound, 'Rounds are off, so the article runs straight through. One recall question waits at the end.');
-    }
+    setText(idleRound, roundNote(config.roundSize));
     const finishedRound = snap.status === 'break'
       ? Math.max(0, snap.index - snap.roundStart)
       : config.roundSize;
@@ -371,28 +392,14 @@ export function createPainter() {
     breakContinue.disabled = asking;
     doneAgain.disabled = asking;
     if (snap.status === 'break') {
-      setText(
-        breakTitle,
-        revealing
-          ? 'That word was here.'
-          : asking
-            ? 'Which one was in the last round?'
-            : 'Breath',
-      );
+      setText(breakTitle, recallHeading(snap.recall?.phase) || 'Breath');
     }
     if (snap.status === 'finished') {
-      setText(
-        doneTitle,
-        revealing
-          ? 'That word was here.'
-          : asking
-            ? 'Which one was in the last round?'
-            : 'Done',
-      );
+      setText(doneTitle, recallHeading(snap.recall?.phase) || 'Done');
     }
     const recallHint = revealing
       ? 'Got it or Space unlocks the rest.'
-      : 'Pick the word. Space waits.';
+      : 'Fill the blank. Space waits.';
     setText(breakRecall.hint, recallHint);
     setText(doneRecall.hint, recallHint);
     const showResult = Boolean(snap.recall && snap.recall.phase === 'ready');

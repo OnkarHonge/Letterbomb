@@ -466,8 +466,16 @@ body.is-paused .word { cursor: pointer; }
 .recall-sentence {
   margin: 0;
   font-family: var(--font-read);
-  font-size: 1.08rem;
+  font-size: 1.2rem;
   line-height: 1.45;
+}
+.recall-blank {
+  display: inline-block;
+  min-width: 4.5rem;
+  border-bottom: 2px solid var(--accent);
+  color: transparent;
+  user-select: none;
+  vertical-align: baseline;
 }
 .recall-mark {
   background: none;

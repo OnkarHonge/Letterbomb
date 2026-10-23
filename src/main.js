@@ -10,7 +10,7 @@ import { countWords } from './engine/parseText.js';
 import { loadSave, writeSave } from './storage.js';
 import { must, setText } from './ui/dom.js';
 import { bindLibrary } from './ui/library.js';
-import { createPainter } from './ui/paint.js';
+import { createPainter, recallPrompt } from './ui/paint.js';
 import { bindSettings } from './ui/settings.js';
 
 const saved = loadSave();
@@ -116,7 +116,7 @@ function handleEvent(event) {
 
   if (event.type === 'recall-miss') {
     sound.recallMiss();
-    setText(live, 'Not that one. The sentence is on screen.');
+    setText(live, 'Not that one. The word is marked in the sentence.');
     return;
   }
 
@@ -157,7 +157,7 @@ function handleEvent(event) {
     setText(
       live,
       event.recall
-        ? 'Round complete. Which word was in that round?'
+        ? recallPrompt(false)
         : 'Round complete. Press Space to continue.',
     );
     return;
@@ -168,7 +168,7 @@ function handleEvent(event) {
     if (records.streak) notes.push('New best streak.');
     if (records.score) notes.push('New best score.');
     const lead = event.recall
-      ? 'Article complete. Which word was in the last round?'
+      ? recallPrompt(true)
       : 'Article complete.';
     setText(live, [lead, ...notes].join(' '));
     scheduleSave();
