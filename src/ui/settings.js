@@ -2,6 +2,17 @@ import { DEFAULT_CONFIG, PACE_PRESETS, matchingPace, pacePatch } from '../engine
 import { wordDeadlineMs } from '../engine/timing.js';
 import { must, setText } from './dom.js';
 
+export function wordWindowNote(config) {
+  const plain = wordDeadlineMs({ hasPunctuation: false, isTarget: true }, config);
+  const marked = wordDeadlineMs({ hasPunctuation: true, isTarget: true }, config);
+  const opened = wordDeadlineMs({ hasPunctuation: false, isTarget: true, isOpening: true }, config);
+  return [
+    `A normal word gives you ${plain} ms.`,
+    `A word with punctuation gives you ${marked} ms.`,
+    `The first word after a window gives you ${opened} ms.`,
+  ].join(' ');
+}
+
 export function bindSettings(game, { onChange }) {
   const wpm = must('cfg-wpm');
   const wpmVal = must('cfg-wpm-val');
@@ -11,6 +22,8 @@ export function bindSettings(game, { onChange }) {
   const freezeVal = must('cfg-freeze-val');
   const punct = must('cfg-punct');
   const punctVal = must('cfg-punct-val');
+  const opening = must('cfg-opening');
+  const openingVal = must('cfg-opening-val');
   const round = must('cfg-round');
   const roundVal = must('cfg-round-val');
   const font = must('cfg-font');
@@ -42,14 +55,10 @@ export function bindSettings(game, { onChange }) {
     setText(forgiveVal, `${config.forgivenessMs} ms`);
     setText(freezeVal, `${config.freezeSec.toFixed(1)} s`);
     setText(punctVal, `${config.punctuationMultiplier.toFixed(1)}×`);
+    setText(openingVal, `${config.openingMultiplier.toFixed(1)}×`);
     setText(roundVal, config.roundSize === 0 ? 'No breaks' : `${config.roundSize} words`);
     setText(fontVal, `${Math.round(config.fontScale * 100)}%`);
-    const plain = wordDeadlineMs({ hasPunctuation: false, isTarget: true }, config);
-    const marked = wordDeadlineMs({ hasPunctuation: true, isTarget: true }, config);
-    setText(
-      windowNote,
-      `A normal word gives you ${plain} ms. A word with punctuation gives you ${marked} ms.`,
-    );
+    setText(windowNote, wordWindowNote(config));
   }
 
   function readForm() {
@@ -59,6 +68,7 @@ export function bindSettings(game, { onChange }) {
       forgivenessMs: Number(forgive.value),
       freezeSec: Number(freeze.value),
       punctuationMultiplier: Number(punct.value),
+      openingMultiplier: Number(opening.value),
       roundSize: Number(round.value),
       fontScale: Number(font.value) / 100,
       filter: filter.value,
@@ -87,6 +97,7 @@ export function bindSettings(game, { onChange }) {
     forgive.value = String(config.forgivenessMs);
     freeze.value = String(config.freezeSec);
     punct.value = String(config.punctuationMultiplier);
+    opening.value = String(config.openingMultiplier);
     round.value = String(config.roundSize);
     font.value = String(Math.round(config.fontScale * 100));
     filter.value = config.filter;
@@ -103,7 +114,7 @@ export function bindSettings(game, { onChange }) {
     paintLabels(config);
   }
 
-  for (const input of [wpm, forgive, freeze, punct, round, font]) {
+  for (const input of [wpm, forgive, freeze, punct, opening, round, font]) {
     input.addEventListener('input', applyForm);
   }
   for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, ...viewRadios]) {

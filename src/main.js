@@ -210,6 +210,7 @@ function openModal(modal, opener) {
     if (game.status === 'playing') game.pause();
     else if (game.status === 'frozen') game.hold(at);
   }
+  game.cover();
   for (const item of modals) item.hidden = item !== modal;
   app.inert = true;
   modalReturn = opener || null;

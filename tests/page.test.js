@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, LIMITS, THEMES, VIEW_MODES } from '../src/engine/config.js';
 import { FILTERS, LONG_WORD_LETTERS, VOWELS } from '../src/engine/parseText.js';
 import { missRule, pauseRule } from '../src/ui/paint.js';
+import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 
@@ -46,6 +47,7 @@ describe('page and engine', () => {
     expect(html).toContain(missRule(DEFAULT_CONFIG.freezeSec));
     expect(html).toContain(pauseRule(false));
     expect(html).toContain('Extra time on words with punctuation.');
+    expect(html).toContain('Extra time on the first word after a window closes.');
     expect(html).toContain('plus your all-time streak');
 
     expect(checked('cfg-advance')).toBe(DEFAULT_CONFIG.advanceOnHit);
@@ -81,6 +83,17 @@ describe('page and engine', () => {
       max: LIMITS.punctuationMultiplier[1],
       value: DEFAULT_CONFIG.punctuationMultiplier,
     });
+    expect(range('cfg-opening')).toMatchObject({
+      min: LIMITS.openingMultiplier[0],
+      max: LIMITS.openingMultiplier[1],
+      value: DEFAULT_CONFIG.openingMultiplier,
+    });
+    expect(wordWindowNote(DEFAULT_CONFIG)).toBe(
+      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 880 ms.',
+    );
+    expect(wordWindowNote({ ...DEFAULT_CONFIG, openingMultiplier: 3 })).toBe(
+      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 1480 ms.',
+    );
     expect(range('cfg-round')).toMatchObject({
       min: LIMITS.roundSize[0],
       max: LIMITS.roundSize[1],
