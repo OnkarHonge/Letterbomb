@@ -32,6 +32,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let wordStartedAt = 0;
   let deadlineMs = 0;
   let responded = false;
+  let opening = false;
+  let pendingOpening = false;
   let missReason = null;
   let missedKey = null;
   let freezeUntil = 0;
@@ -62,13 +64,21 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     recall = null;
   }
 
+  function deadlineFor(word) {
+    if (!opening || !word) return wordDeadlineMs(word, config);
+    return wordDeadlineMs({ ...word, isOpening: true }, config);
+  }
+
   function beginWord(at) {
     status = STATUS.PLAYING;
     responded = false;
     missReason = null;
     missedKey = null;
     wordStartedAt = at;
-    deadlineMs = wordDeadlineMs(words[index], config);
+    const word = words[index];
+    opening = Boolean(word?.isTarget && pendingOpening);
+    if (opening) pendingOpening = false;
+    deadlineMs = deadlineFor(word);
     emit({ type: 'word', index });
   }
 
@@ -84,6 +94,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function finish() {
     status = STATUS.FINISHED;
     responded = false;
+    opening = false;
     missReason = null;
     missedKey = null;
     held = false;
@@ -104,6 +115,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (config.roundSize > 0 && doneInRound >= config.roundSize) {
       status = STATUS.BREAK;
       responded = false;
+      opening = false;
       missReason = null;
       missedKey = null;
       openRecall();
@@ -163,6 +175,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     missReason = null;
     missedKey = null;
     held = false;
+    opening = false;
+    pendingOpening = false;
     lastPressAt = Number.NEGATIVE_INFINITY;
     epoch += 1;
     emit({ type: 'load', total: words.length });
@@ -177,7 +191,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       epoch += 1;
     }
     if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
-      deadlineMs = wordDeadlineMs(words[index], config);
+      deadlineMs = deadlineFor(words[index]);
     }
     return { ...config };
   }
@@ -194,6 +208,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     missedKey = null;
     lastPressAt = Number.NEGATIVE_INFINITY;
     emit({ type: 'start' });
+    pendingOpening = true;
     beginWord(at);
     return true;
   }
@@ -216,8 +231,13 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       advance(at);
       return true;
     }
+    if (opening) pendingOpening = true;
     beginWord(at);
     return true;
+  }
+
+  function cover() {
+    pendingOpening = true;
   }
 
   function continueRound(at = now()) {
@@ -229,6 +249,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       return true;
     }
     roundStartIndex = index;
+    pendingOpening = true;
     beginWord(at);
     return true;
   }
@@ -242,7 +263,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     responded = false;
     missReason = null;
     missedKey = null;
-    deadlineMs = wordDeadlineMs(words[index], config);
+    opening = false;
+    deadlineMs = deadlineFor(words[index]);
     emit({ type: 'jump', index });
     return true;
   }
@@ -390,6 +412,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     start,
     pause,
     resume,
+    cover,
     continueRound,
     jumpTo,
     hold,

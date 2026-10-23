@@ -104,6 +104,13 @@ describe('timing', () => {
     expect(wordDeadlineMs({ hasPunctuation: false, isTarget: true }, pace)).toBe(150);
     expect(wordDeadlineMs({ hasPunctuation: true, isTarget: true }, pace)).toBe(250);
   });
+
+  it('multiplies an opening word before forgiveness, then stacks punctuation', () => {
+    const pace = { wpm: 600, forgivenessMs: 50, punctuationMultiplier: 2, openingMultiplier: 3 };
+    expect(wordDeadlineMs({ isTarget: true, isOpening: true }, pace)).toBe(350);
+    expect(wordDeadlineMs({ isTarget: true, hasPunctuation: true, isOpening: true }, pace)).toBe(650);
+    expect(wordDeadlineMs({ isTarget: false, isOpening: true }, pace)).toBe(300);
+  });
 });
 
 describe('scoring', () => {
@@ -126,5 +133,8 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({ wpm: 9000, roundSize: 0, fontScale: 2 }).wpm).toBe(800);
     expect(sanitizeConfig({ roundSize: 0 }).roundSize).toBe(0);
     expect(sanitizeConfig({ viewMode: 'nope' }).viewMode).toBe('karaoke');
+    expect(sanitizeConfig({ openingMultiplier: 9 }).openingMultiplier).toBe(3);
+    expect(sanitizeConfig({ openingMultiplier: 0 }).openingMultiplier).toBe(1);
+    expect(sanitizeConfig({ wpm: 150 }).openingMultiplier).toBe(DEFAULT_CONFIG.openingMultiplier);
   });
 });

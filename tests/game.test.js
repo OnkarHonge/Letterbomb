@@ -3,6 +3,7 @@ import { PACE_PRESETS, pacePatch } from '../src/engine/config.js';
 import { createGame, STATUS } from '../src/engine/game.js';
 import { recallBounds, selectTarget } from '../src/engine/recall.js';
 import { RECALL_BONUS } from '../src/engine/scoring.js';
+import { wordDeadlineMs } from '../src/engine/timing.js';
 
 function setup(text, config = {}) {
   const game = createGame();
@@ -11,6 +12,7 @@ function setup(text, config = {}) {
     forgivenessMs: 0,
     freezeSec: 0,
     punctuationMultiplier: 1,
+    openingMultiplier: 1,
     roundSize: 0,
     advanceOnHit: true,
     ...config,
@@ -469,5 +471,193 @@ describe('playing a pace', () => {
     game.start(0);
     expect(game.press('a', 40)).toBe(true);
     expect(game.snapshot(40)).toMatchObject({ status: STATUS.PLAYING, index: 0, hits: 1 });
+  });
+});
+
+describe('opening pause', () => {
+  it('gives the first word a longer window after Start, a breath, and Read again', () => {
+    const game = setup('Go Go Go Go', { openingMultiplier: 2, roundSize: 2 });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(200);
+
+    game.press('g', 10);
+    expect(game.snapshot(10)).toMatchObject({ index: 1, deadlineMs: 100 });
+    game.press('g', 50);
+    expect(game.status).toBe(STATUS.BREAK);
+
+    game.continueRound(60);
+    expect(game.snapshot(60)).toMatchObject({ index: 2, deadlineMs: 200 });
+    game.press('g', 100);
+    expect(game.snapshot(100)).toMatchObject({ index: 3, deadlineMs: 100 });
+    game.press('g', 140);
+    expect(game.status).toBe(STATUS.FINISHED);
+
+    game.start(160);
+    expect(game.snapshot(160)).toMatchObject({ index: 0, deadlineMs: 200 });
+  });
+
+  it('keeps that longer window when the same word is paused', () => {
+    const game = setup('Alpha Beta', { openingMultiplier: 2 });
+    game.start(0);
+    game.pause();
+    game.resume(50);
+    expect(game.snapshot(50).deadlineMs).toBe(200);
+    game.tick(249);
+    expect(game.snapshot(249)).toMatchObject({ index: 0, misses: 0 });
+    game.tick(250);
+    expect(game.snapshot(250)).toMatchObject({ index: 1, deadlineMs: 100, misses: 1 });
+
+    game.pause();
+    game.resume(300);
+    expect(game.snapshot(300).deadlineMs).toBe(100);
+  });
+
+  it('gives a longer window to the word played after a covering window', () => {
+    const game = setup('Alpha Beta Gamma', { openingMultiplier: 2 });
+    game.start(0);
+    game.press('a', 10);
+    expect(game.snapshot(10).deadlineMs).toBe(100);
+
+    game.pause();
+    game.cover();
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({ index: 1, deadlineMs: 200 });
+
+    game.press('b', 50);
+    game.pause();
+    game.cover();
+    game.jumpTo(2);
+    game.resume(60);
+    expect(game.snapshot(60)).toMatchObject({ index: 2, deadlineMs: 200 });
+  });
+
+  it('keeps the normal window when a word is chosen during a plain pause', () => {
+    const game = setup('Alpha Beta Gamma', { openingMultiplier: 2 });
+    game.start(0);
+    game.press('a', 10);
+    game.pause();
+    game.jumpTo(2);
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({ index: 2, deadlineMs: 100 });
+  });
+
+  it('gives the next word a longer window when a window covered the freeze', () => {
+    const game = setup('Alpha Beta', { openingMultiplier: 2, freezeSec: 1 });
+    game.start(0);
+    game.press('z', 10);
+    game.cover();
+    game.tick(1009);
+    expect(game.status).toBe(STATUS.FROZEN);
+    game.tick(1010);
+    expect(game.snapshot(1010)).toMatchObject({ index: 1, deadlineMs: 200, misses: 1 });
+  });
+
+  it('holds the longer window for the first word that needs a key', () => {
+    const game = setup('the Alpha Stays', { filter: 'capital', openingMultiplier: 2 });
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({ index: 0, isTarget: false, deadlineMs: 100 });
+    game.tick(100);
+    expect(game.snapshot(100)).toMatchObject({ index: 1, answer: 'A', deadlineMs: 200, misses: 0 });
+    game.tick(299);
+    expect(game.snapshot(299).index).toBe(1);
+    game.tick(300);
+    expect(game.snapshot(300)).toMatchObject({ index: 2, answer: 'S', deadlineMs: 100, misses: 1 });
+  });
+
+  it('holds that longer window after a breath when the next word needs no key', () => {
+    const game = setup('Go Go the Alpha', { filter: 'capital', openingMultiplier: 2, roundSize: 2 });
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({ answer: 'G', deadlineMs: 200 });
+    game.press('g', 10);
+    game.press('g', 50);
+    expect(game.status).toBe(STATUS.BREAK);
+
+    game.continueRound(60);
+    expect(game.snapshot(60)).toMatchObject({ index: 2, isTarget: false, deadlineMs: 100 });
+    game.tick(159);
+    expect(game.snapshot(159).index).toBe(2);
+    game.tick(160);
+    expect(game.snapshot(160)).toMatchObject({ index: 3, answer: 'A', deadlineMs: 200, misses: 0 });
+  });
+
+  it('adds punctuation on top of the opening word only', () => {
+    const game = setup('Hi, Ho', { punctuationMultiplier: 2, openingMultiplier: 3 });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(600);
+    game.tick(599);
+    expect(game.snapshot(599)).toMatchObject({ index: 0, misses: 0 });
+    game.tick(600);
+    expect(game.snapshot(600)).toMatchObject({ index: 1, deadlineMs: 100, misses: 1 });
+  });
+
+  it('applies a covering window once', () => {
+    const game = setup('Alpha Beta', { openingMultiplier: 2 });
+    game.start(0);
+    game.pause();
+    game.cover();
+    game.cover();
+    game.resume(20);
+    expect(game.snapshot(20).deadlineMs).toBe(200);
+  });
+
+  it('does not hand the longer window to the next word after the letter was already right', () => {
+    const game = setup('Alpha Beta', { openingMultiplier: 2, advanceOnHit: false });
+    game.start(0);
+    game.press('a', 20);
+    game.pause();
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({ index: 1, deadlineMs: 100, misses: 0 });
+  });
+
+  it('gives a longer window after the breath question is done', () => {
+    const game = setup('alpha bravo charlie delta echo foxtrot', { openingMultiplier: 2, roundSize: 4 });
+    game.start(0);
+    let at = 0;
+    for (const letter of ['a', 'b', 'c', 'd']) {
+      at += 40;
+      expect(game.press(letter, at)).toBe(true);
+    }
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(game.continueRound(at)).toBe(false);
+
+    const choice = game.snapshot().recall.choices.find((item) => item.label === 'bravo');
+    expect(game.answerRecall(choice.id)).toBe(true);
+    expect(game.continueRound(at + 20)).toBe(true);
+    expect(game.snapshot(at + 20)).toMatchObject({ index: 4, deadlineMs: 200 });
+    expect(game.press('e', at + 60)).toBe(true);
+    expect(game.snapshot(at + 60)).toMatchObject({ index: 5, deadlineMs: 100 });
+  });
+
+  it('keeps the opening pause when a pace is chosen', () => {
+    const game = setup('Concept', { openingMultiplier: 3, roundSize: 0 });
+    game.setConfig(pacePatch(PACE_PRESETS.linger));
+    expect(game.config).toMatchObject({
+      wpm: PACE_PRESETS.linger.wpm,
+      forgivenessMs: PACE_PRESETS.linger.forgivenessMs,
+      openingMultiplier: 3,
+    });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(
+      wordDeadlineMs({ isTarget: true, isOpening: true }, game.config),
+    );
+  });
+
+  it('uses the opening pause chosen while a window is open', () => {
+    const game = setup('Alpha Beta', { openingMultiplier: 2 });
+    game.start(0);
+    game.press('a', 10);
+    game.pause();
+    game.cover();
+    game.setConfig({ openingMultiplier: 3 });
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({ index: 1, deadlineMs: 300 });
+  });
+
+  it('follows the slider while the opening word is still up', () => {
+    const game = setup('Alpha', { openingMultiplier: 2 });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(200);
+    game.setConfig({ openingMultiplier: 3 });
+    expect(game.snapshot(0).deadlineMs).toBe(300);
   });
 });

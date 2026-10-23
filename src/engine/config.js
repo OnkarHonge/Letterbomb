@@ -5,6 +5,7 @@ export const LIMITS = {
   forgivenessMs: [0, 800],
   freezeSec: [0, 3],
   punctuationMultiplier: [1, 3],
+  openingMultiplier: [1, 3],
   fontScale: [0.85, 1.6],
   roundSize: [0, 200],
 };
@@ -14,6 +15,7 @@ export const DEFAULT_CONFIG = {
   forgivenessMs: 280,
   freezeSec: 0.8,
   punctuationMultiplier: 1.5,
+  openingMultiplier: 1.5,
   viewMode: 'karaoke',
   filter: 'all',
   sound: true,
@@ -121,6 +123,12 @@ export function sanitizeConfig(input) {
     config.punctuationMultiplier,
     LIMITS.punctuationMultiplier,
     DEFAULT_CONFIG.punctuationMultiplier,
+    1,
+  );
+  config.openingMultiplier = clampNum(
+    config.openingMultiplier,
+    LIMITS.openingMultiplier,
+    DEFAULT_CONFIG.openingMultiplier,
     1,
   );
   config.fontScale = clampNum(config.fontScale, LIMITS.fontScale, DEFAULT_CONFIG.fontScale, 2);
