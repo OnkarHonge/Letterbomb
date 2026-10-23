@@ -76,16 +76,27 @@ export const PACE_PRESETS = {
   },
 };
 
-/** Fields a Tune pace button writes. Other settings stay as they are. */
+const PACE_KEYS = ['wpm', 'forgivenessMs', 'freezeSec', 'showTargetHud', 'advanceOnHit'];
+
+/**
+ * Values a Tune pace button writes.
+ * A preset that omits a field, such as advanceOnHit on Warmup, leaves that setting alone.
+ */
 export function pacePatch(preset) {
-  const patch = {
-    wpm: preset.wpm,
-    forgivenessMs: preset.forgivenessMs,
-    freezeSec: preset.freezeSec,
-    showTargetHud: preset.showTargetHud,
-  };
-  if (preset.advanceOnHit !== undefined) patch.advanceOnHit = preset.advanceOnHit;
+  const patch = {};
+  for (const key of PACE_KEYS) {
+    if (preset[key] !== undefined) patch[key] = preset[key];
+  }
   return patch;
+}
+
+/** The pace whose written fields all match, or null once the sliders have drifted. */
+export function matchingPace(config) {
+  const found = Object.keys(PACE_PRESETS).filter((id) => {
+    const patch = pacePatch(PACE_PRESETS[id]);
+    return Object.keys(patch).every((key) => config[key] === patch[key]);
+  });
+  return found.length === 1 ? found[0] : null;
 }
 
 export const VIEW_MODES = new Set(['karaoke', 'rsvp']);

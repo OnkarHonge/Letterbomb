@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { LIMITS, PACE_PRESETS, pacePatch, sanitizeConfig } from '../src/engine/config.js';
+import { DEFAULT_CONFIG, LIMITS, PACE_PRESETS, matchingPace, pacePatch, sanitizeConfig } from '../src/engine/config.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
 const ORDER = ['linger', 'study', 'read', 'warmup', 'flow', 'reflex'];
@@ -21,7 +21,7 @@ function windowMs(id, hasPunctuation) {
 }
 
 describe('pace presets', () => {
-  it('lists six paces from a first reading down to reflex', () => {
+  it('lists the paces from a first reading down to Reflex', () => {
     expect(Object.keys(PACE_PRESETS)).toEqual(ORDER);
     expect(ORDER.map((id) => PACE_PRESETS[id].label)).toEqual([
       'Linger',
@@ -33,24 +33,15 @@ describe('pace presets', () => {
     ]);
   });
 
-  it('gives each pace a shorter word than the one before it', () => {
+  it('gives each pace less time than the one before it', () => {
     for (const id of ORDER) {
       expect(windowMs(id, false)).toBe(WINDOWS_MS[id].plain);
       expect(windowMs(id, true)).toBe(WINDOWS_MS[id].punctuated);
     }
 
-    const plain = ORDER.map((id) => windowMs(id, false));
-    const punctuated = ORDER.map((id) => windowMs(id, true));
-    expect([...plain].sort((a, b) => b - a)).toEqual(plain);
-    expect([...punctuated].sort((a, b) => b - a)).toEqual(punctuated);
-    expect(new Set(plain).size).toBe(plain.length);
-  });
-
-  it('keeps Read, Study, and Linger slower than Warmup', () => {
-    const warmup = windowMs('warmup', false);
-    for (const id of ['read', 'study', 'linger']) {
-      expect(windowMs(id, false)).toBeGreaterThan(warmup);
-      expect(windowMs(id, true)).toBeGreaterThan(windowMs('warmup', true));
+    for (let index = 1; index < ORDER.length; index += 1) {
+      expect(windowMs(ORDER[index], false)).toBeLessThan(windowMs(ORDER[index - 1], false));
+      expect(windowMs(ORDER[index], true)).toBeLessThan(windowMs(ORDER[index - 1], true));
     }
   });
 
@@ -65,27 +56,37 @@ describe('pace presets', () => {
     }
   });
 
-  it('shows the answer on every pace, including Reflex', () => {
+  it('shows the answer on every pace', () => {
     for (const preset of Object.values(PACE_PRESETS)) {
       expect(preset.showTargetHud).toBe(true);
     }
   });
 
-  it('writes pace fields without touching the rest of Tune', () => {
-    expect(pacePatch(PACE_PRESETS.linger)).toEqual({
-      wpm: 10,
-      forgivenessMs: 800,
-      freezeSec: 0.5,
-      showTargetHud: true,
-      advanceOnHit: true,
-    });
-    expect(pacePatch(PACE_PRESETS.warmup)).toEqual({
-      wpm: 70,
-      forgivenessMs: 600,
-      freezeSec: 0.5,
-      showTargetHud: true,
-    });
-    expect(pacePatch(PACE_PRESETS.reflex)).not.toHaveProperty('advanceOnHit');
+  it('writes only the fields a pace owns', () => {
+    for (const preset of Object.values(PACE_PRESETS)) {
+      const patch = pacePatch(preset);
+      const keys = ['wpm', 'forgivenessMs', 'freezeSec', 'showTargetHud'];
+      if (preset.advanceOnHit !== undefined) keys.push('advanceOnHit');
+      expect(Object.keys(patch)).toEqual(keys);
+      expect(patch).toMatchObject({
+        wpm: preset.wpm,
+        forgivenessMs: preset.forgivenessMs,
+        freezeSec: preset.freezeSec,
+        showTargetHud: preset.showTargetHud,
+      });
+      if (preset.advanceOnHit !== undefined) expect(patch.advanceOnHit).toBe(preset.advanceOnHit);
+    }
+  });
+
+  it('matches a pace only when every field it writes is current', () => {
+    expect(matchingPace(DEFAULT_CONFIG)).toBeNull();
+    for (const id of ORDER) {
+      const config = sanitizeConfig(pacePatch(PACE_PRESETS[id]));
+      expect(matchingPace(config)).toBe(id);
+      expect(matchingPace({ ...config, forgivenessMs: config.forgivenessMs + 10 })).toBeNull();
+    }
+    const linger = sanitizeConfig(pacePatch(PACE_PRESETS.linger));
+    expect(matchingPace({ ...linger, advanceOnHit: false })).toBeNull();
   });
 
   it('survives sanitizing, so a chosen pace is not clamped away', () => {
@@ -115,7 +116,9 @@ describe('Tune pace controls', () => {
     const ids = [...html.matchAll(/data-pace="([^"]+)"/g)].map((match) => match[1]);
     expect(ids).toEqual(ORDER);
     for (const id of ORDER) {
-      expect(html).toContain(`data-pace="${id}">${PACE_PRESETS[id].label}</button>`);
+      expect(html).toContain(
+        `data-pace="${id}" aria-pressed="false">${PACE_PRESETS[id].label}</button>`,
+      );
     }
   });
 

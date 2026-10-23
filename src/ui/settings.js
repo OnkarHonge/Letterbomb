@@ -1,4 +1,4 @@
-import { PACE_PRESETS, DEFAULT_CONFIG, pacePatch } from '../engine/config.js';
+import { DEFAULT_CONFIG, PACE_PRESETS, matchingPace, pacePatch } from '../engine/config.js';
 import { wordDeadlineMs } from '../engine/timing.js';
 import { must, setText } from './dom.js';
 
@@ -25,11 +25,13 @@ export function bindSettings(game, { onChange }) {
   const focus = must('cfg-focus');
   const motion = must('cfg-motion');
   const themeGrid = must('theme-grid');
+  const themeButtons = [...themeGrid.querySelectorAll('[data-theme]')];
+  const paceButtons = [...must('pace-grid').querySelectorAll('[data-pace]')];
   const viewRadios = [...document.querySelectorAll('input[name="view"]')];
 
-  function markTheme(theme) {
-    for (const button of themeGrid.querySelectorAll('[data-theme]')) {
-      const on = button.dataset.theme === theme;
+  function markChoice(buttons, key, active) {
+    for (const button of buttons) {
+      const on = button.dataset[key] === active;
       button.classList.toggle('is-active', on);
       button.setAttribute('aria-pressed', String(on));
     }
@@ -51,7 +53,7 @@ export function bindSettings(game, { onChange }) {
   }
 
   function readForm() {
-    const theme = themeGrid.querySelector('.is-active')?.dataset.theme;
+    const theme = themeButtons.find((button) => button.getAttribute('aria-pressed') === 'true')?.dataset.theme;
     return {
       wpm: Number(wpm.value),
       forgivenessMs: Number(forgive.value),
@@ -75,6 +77,7 @@ export function bindSettings(game, { onChange }) {
   function applyForm() {
     game.setConfig(readForm());
     paintLabels(game.config);
+    markChoice(paceButtons, 'pace', matchingPace(game.config));
     onChange();
   }
 
@@ -95,7 +98,8 @@ export function bindSettings(game, { onChange }) {
     focus.checked = config.focusMode;
     motion.checked = config.reducedMotion;
     for (const radio of viewRadios) radio.checked = radio.value === config.viewMode;
-    markTheme(config.theme);
+    markChoice(themeButtons, 'theme', config.theme);
+    markChoice(paceButtons, 'pace', matchingPace(config));
     paintLabels(config);
   }
 
@@ -106,7 +110,7 @@ export function bindSettings(game, { onChange }) {
     input.addEventListener('change', applyForm);
   }
 
-  for (const button of document.querySelectorAll('[data-pace]')) {
+  for (const button of paceButtons) {
     const preset = PACE_PRESETS[button.dataset.pace];
     if (!preset) continue;
     button.textContent = `${preset.label} · ${preset.wpm} WPM`;
@@ -117,9 +121,9 @@ export function bindSettings(game, { onChange }) {
     });
   }
 
-  for (const button of themeGrid.querySelectorAll('[data-theme]')) {
+  for (const button of themeButtons) {
     button.addEventListener('click', () => {
-      markTheme(button.dataset.theme);
+      markChoice(themeButtons, 'theme', button.dataset.theme);
       game.setConfig({ theme: button.dataset.theme });
       onChange();
     });
