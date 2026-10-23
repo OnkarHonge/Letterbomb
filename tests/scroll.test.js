@@ -2,9 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   MIN_PREVIEW_LINES,
   PREVIEW_INSET,
+  SCROLL_TAKEOVER,
+  advanceScroll,
+  beginScroll,
+  easedScrollTop,
   nextLineUnder,
+  scrollEaseMs,
   scrollTopForReadingLine,
   scrollTopToReveal,
+  scrollWasTaken,
 } from '../src/ui/scroll.js';
 
 const row = (top, height = 40) => ({ top, height });
@@ -160,5 +166,87 @@ describe('scrollTopForReadingLine', () => {
       nextLineBottom: 400,
     });
     expect(next).toBe(28);
+  });
+});
+
+describe('reading scroll motion', () => {
+  it('gives a one-line move a short ease and caps a long jump', () => {
+    expect(scrollEaseMs(0)).toBe(0);
+    expect(scrollEaseMs(Number.NaN)).toBe(0);
+    expect(scrollEaseMs(-50)).toBe(scrollEaseMs(50));
+    expect(scrollEaseMs(50)).toBe(250);
+    expect(scrollEaseMs(10)).toBe(180);
+    expect(scrollEaseMs(800)).toBe(420);
+  });
+
+  it('starts immediately and settles on the target', () => {
+    const duration = scrollEaseMs(50);
+    expect(easedScrollTop(10, 60, -10, duration)).toBe(10);
+    expect(easedScrollTop(10, 60, 0, duration)).toBe(10);
+    expect(easedScrollTop(10, 60, duration / 2, duration)).toBe(47.5);
+    expect(easedScrollTop(10, 60, duration + 20, duration)).toBe(60);
+    expect(easedScrollTop(100, 40, duration / 2, duration)).toBe(55);
+    expect(easedScrollTop(10, 60, 0, 0)).toBe(60);
+  });
+
+  it('jumps when motion is reduced and leaves a settled line alone', () => {
+    const gliding = { from: 0, to: 44, start: 0, duration: 250, expected: 10 };
+    expect(beginScroll({
+      current: 10,
+      target: 44,
+      now: 20,
+      motion: gliding,
+      smooth: false,
+    })).toEqual({ motion: null, scrollTop: 44 });
+    expect(beginScroll({ current: 44, target: 44.4, now: 20, smooth: true })).toEqual({
+      motion: null,
+      scrollTop: null,
+    });
+  });
+
+  it('keeps a glide that is already heading for this line', () => {
+    const gliding = { from: 0, to: 44, start: 10, duration: 250, expected: 12 };
+    const step = beginScroll({ current: 12, target: 44.4, now: 40, motion: gliding, smooth: true });
+    expect(step.motion).toBe(gliding);
+    expect(step.scrollTop).toBeNull();
+  });
+
+  it('retargets a glide from the position it has reached', () => {
+    const gliding = { from: 0, to: 44, start: 0, duration: 250, expected: 20 };
+    const step = beginScroll({ current: 20, target: 90, now: 80, motion: gliding, smooth: true });
+    expect(step.scrollTop).toBeNull();
+    expect(step.motion).toEqual({
+      from: 20,
+      to: 90,
+      start: 80,
+      duration: scrollEaseMs(70),
+      expected: 20,
+    });
+  });
+
+  it('eases one frame at a time and then clears the glide', () => {
+    const started = beginScroll({ current: 0, target: 50, now: 100, smooth: true });
+    const mid = advanceScroll(started.motion, 100 + started.motion.duration / 2, true);
+    expect(mid.scrollTop).toBe(easedScrollTop(0, 50, started.motion.duration / 2, started.motion.duration));
+    expect(mid.motion.expected).toBe(mid.scrollTop);
+    expect(started.motion.expected).toBe(0);
+
+    const done = advanceScroll(started.motion, 100 + started.motion.duration, true);
+    expect(done).toEqual({ motion: null, scrollTop: 50 });
+    expect(advanceScroll(null, 0, true)).toEqual({ motion: null, scrollTop: null });
+  });
+
+  it('snaps the rest of a glide when motion is reduced', () => {
+    const started = beginScroll({ current: 0, target: 50, now: 0, smooth: true });
+    expect(advanceScroll(started.motion, 40, false)).toEqual({ motion: null, scrollTop: 50 });
+  });
+
+  it('treats a scroll away from the glide as the reader taking over', () => {
+    const motion = { expected: 10, applying: false };
+    expect(scrollWasTaken(null, 40)).toBe(false);
+    expect(scrollWasTaken({ expected: null }, 40)).toBe(false);
+    expect(scrollWasTaken({ ...motion, applying: true }, 40)).toBe(false);
+    expect(scrollWasTaken(motion, 10 + SCROLL_TAKEOVER)).toBe(false);
+    expect(scrollWasTaken(motion, 10 + SCROLL_TAKEOVER + 0.5)).toBe(true);
   });
 });

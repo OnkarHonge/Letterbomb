@@ -1,6 +1,7 @@
 export const MIN_PREVIEW_LINES = 3;
 export const PREVIEW_INSET = 4;
 const SAME_ROW = 2;
+export const SCROLL_TAKEOVER = 2;
 
 // Move the scroller only far enough to put the word inside the padded view.
 export function scrollTopToReveal(scrollTop, viewHeight, wordTop, wordHeight, pad = 12) {
@@ -82,4 +83,61 @@ export function nextLineUnder(words, activeTop, activeHeight = 0) {
     lineHeight: typical || fallback,
     nextLineBottom: nextTop == null ? null : nextBottom,
   };
+}
+
+// A line of text settles in a fraction of a second. A long jump stays brief.
+export function scrollEaseMs(distance) {
+  const px = Math.abs(Number.isFinite(distance) ? distance : 0);
+  if (px < 1) return 0;
+  return Math.round(Math.min(420, Math.max(180, px * 5)));
+}
+
+// Ease-out so the line starts moving immediately and settles at the end.
+export function easedScrollTop(from, to, elapsed, duration) {
+  const start = Number.isFinite(from) ? from : 0;
+  const end = Number.isFinite(to) ? to : start;
+  const span = Number.isFinite(duration) ? duration : 0;
+  if (span <= 0) return end;
+  const t = Math.min(1, Math.max(0, elapsed / span));
+  const eased = 1 - (1 - t) ** 2;
+  return start + (end - start) * eased;
+}
+
+// Start a glide, keep the one already running, or jump when motion is reduced.
+export function beginScroll({ current, target, now = 0, motion = null, smooth = true } = {}) {
+  const from = Number.isFinite(current) ? current : 0;
+  const to = Number.isFinite(target) ? target : from;
+  if (!smooth || Math.abs(to - from) < 1) {
+    return { motion: null, scrollTop: Math.abs(to - from) >= 1 ? to : null };
+  }
+  if (motion && Math.abs(motion.to - to) < 1) return { motion, scrollTop: null };
+  return {
+    motion: {
+      from,
+      to,
+      start: Number.isFinite(now) ? now : 0,
+      duration: scrollEaseMs(to - from),
+      expected: from,
+    },
+    scrollTop: null,
+  };
+}
+
+export function advanceScroll(motion, now = 0, smooth = true) {
+  if (!motion) return { motion: null, scrollTop: null };
+  if (!smooth) return { motion: null, scrollTop: motion.to };
+  const start = Number.isFinite(motion.start) ? motion.start : 0;
+  const elapsed = (Number.isFinite(now) ? now : 0) - start;
+  const done = elapsed >= motion.duration;
+  const scrollTop = done
+    ? motion.to
+    : easedScrollTop(motion.from, motion.to, elapsed, motion.duration);
+  if (done) return { motion: null, scrollTop };
+  return { motion: { ...motion, expected: scrollTop }, scrollTop };
+}
+
+export function scrollWasTaken(motion, scrollTop) {
+  if (!motion || motion.applying || motion.expected == null) return false;
+  const top = Number.isFinite(scrollTop) ? scrollTop : 0;
+  return Math.abs(top - motion.expected) > SCROLL_TAKEOVER;
 }

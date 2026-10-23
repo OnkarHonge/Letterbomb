@@ -1,5 +1,11 @@
 import { must, setText } from './dom.js';
-import { nextLineUnder, scrollTopForReadingLine } from './scroll.js';
+import {
+  advanceScroll,
+  beginScroll,
+  nextLineUnder,
+  scrollTopForReadingLine,
+  scrollWasTaken,
+} from './scroll.js';
 
 export function missRule(freezeSec) {
   return freezeSec > 0
@@ -196,7 +202,19 @@ export function createPainter() {
     popToken: 0,
     breakRecall: '',
     doneRecall: '',
+    scroll: null,
+    reduceMotion: false,
+    forceSnap: false,
   };
+
+  function userTookScroll() {
+    state.scroll = null;
+  }
+
+  karaoke.addEventListener('wheel', userTookScroll, { passive: true });
+  karaoke.addEventListener('scroll', () => {
+    if (scrollWasTaken(state.scroll, karaoke.scrollTop)) state.scroll = null;
+  }, { passive: true });
 
   function renderSlice(words, start, end) {
     const fragment = document.createDocumentFragment();
@@ -224,6 +242,31 @@ export function createPainter() {
     return nextLineUnder(words, el.offsetTop, el.offsetHeight);
   }
 
+  function writeScroll(top) {
+    if (top == null || Math.abs(top - karaoke.scrollTop) < 1) return;
+    if (state.scroll) state.scroll.applying = true;
+    karaoke.scrollTop = top;
+    if (state.scroll) state.scroll.applying = false;
+  }
+
+  function moveScroll(top) {
+    const step = beginScroll({
+      current: karaoke.scrollTop,
+      target: top,
+      now: performance.now(),
+      motion: state.scroll,
+      smooth: !state.reduceMotion && !state.forceSnap,
+    });
+    state.scroll = step.motion;
+    writeScroll(step.scrollTop);
+  }
+
+  function stepScroll() {
+    const step = advanceScroll(state.scroll, performance.now(), !state.reduceMotion);
+    state.scroll = step.motion;
+    writeScroll(step.scrollTop);
+  }
+
   function reveal(el) {
     if (!el || karaoke.hidden) return;
     const { lineHeight, nextLineBottom } = previewBelow(el);
@@ -235,7 +278,7 @@ export function createPainter() {
       lineHeight,
       nextLineBottom,
     });
-    if (Math.abs(next - karaoke.scrollTop) >= 1) karaoke.scrollTop = next;
+    moveScroll(next);
   }
 
   function syncActive(snap) {
@@ -254,12 +297,14 @@ export function createPainter() {
     }
     if (!el || snap.config.viewMode !== 'karaoke') {
       state.layout = '';
+      state.scroll = null;
       return;
     }
 
     const layout = `${snap.config.fontScale}:${snap.config.focusMode}:${karaoke.clientHeight}`;
     if (wordChanged || layout !== state.layout) reveal(el);
     state.layout = layout;
+    state.forceSnap = false;
   }
 
   function ensureWindow(snap, words) {
@@ -269,6 +314,8 @@ export function createPainter() {
       state.token = token;
       state.activeEl = null;
       state.layout = '';
+      state.scroll = null;
+      state.forceSnap = true;
     }
     syncActive(snap);
   }
@@ -299,6 +346,7 @@ export function createPainter() {
     }
     document.body.classList.toggle('is-focus', config.focusMode);
     document.body.classList.toggle('reduce-motion', config.reducedMotion);
+    state.reduceMotion = config.reducedMotion;
     document.body.classList.toggle('is-paused', snap.status === 'paused');
 
     if (snap.status === 'frozen' && state.status !== 'frozen') {
@@ -312,6 +360,7 @@ export function createPainter() {
     rsvp.hidden = config.viewMode !== 'rsvp';
     timer.hidden = !config.showTimeBar;
     ensureWindow(snap, words);
+    stepScroll();
     syncRsvp(snap, words);
 
     const remaining = snap.status === 'frozen' ? 0 : 1 - snap.progress;
