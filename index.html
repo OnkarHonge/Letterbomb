@@ -86,7 +86,7 @@
       <div id="pause-bar" class="pause-bar" hidden>
         <div>
           <strong>Paused</strong>
-          <p>This word starts fresh when you resume. Click a word to move the highlight.</p>
+          <p id="pause-copy">This word starts fresh when you resume. Click a word to move the highlight.</p>
         </div>
         <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
       </div>
@@ -103,7 +103,7 @@
             <ol class="steps">
               <li>Read the highlighted word.</li>
               <li>Press its first letter before the bar runs out.</li>
-              <li>Hits build a streak. A miss freezes the board, then you continue.</li>
+              <li id="idle-miss">Hits build a streak. A miss freezes the board, then you continue.</li>
               <li>Each breath asks which word you just read.</li>
             </ol>
             <button type="button" id="idle-start" class="btn btn-primary btn-large">Start</button>
@@ -185,7 +185,7 @@
         <button type="button" class="btn" data-pace="flow" aria-pressed="false">Flow</button>
         <button type="button" class="btn" data-pace="reflex" aria-pressed="false">Reflex</button>
       </div>
-      <p class="field-help">Linger, Study, and Read keep a new word up long enough to understand it. A correct letter still moves on. After you pick one, the sliders still win.</p>
+      <p class="field-help">Linger, Study, and Read keep a new word up long enough to understand it. A correct letter still moves on, and the sliders still win.</p>
 
       <label class="field">
         <span class="field-top"><span>Reading speed</span><b id="cfg-wpm-val">150 WPM</b></span>
@@ -205,7 +205,7 @@
       <label class="field">
         <span class="field-top"><span>Punctuation pause</span><b id="cfg-punct-val">1.5×</b></span>
         <input id="cfg-punct" type="range" min="1" max="3" step="0.1" value="1.5">
-        <span class="field-help">Extra time on words with a comma, period, or question mark.</span>
+        <span class="field-help">Extra time on words with punctuation.</span>
       </label>
       <p id="cfg-window" class="window-note"></p>
 
@@ -311,7 +311,7 @@
       <div class="modal-head">
         <div>
           <h2 id="stats-title">This run</h2>
-          <p class="field-help">Numbers from the article that is loaded now.</p>
+          <p class="field-help">Numbers from the article that is loaded now, plus your all-time streak.</p>
         </div>
         <button type="button" class="btn js-close">Close</button>
       </div>

@@ -118,11 +118,26 @@ describe('game', () => {
     const game = setup('Alpha Beta', { advanceOnHit: false });
     game.start(0);
     game.press('a', 20);
-    expect(game.snapshot(20)).toMatchObject({ index: 0, score: 100, status: STATUS.PLAYING });
+    expect(game.snapshot(20)).toMatchObject({
+      index: 0,
+      score: 100,
+      status: STATUS.PLAYING,
+      responded: true,
+    });
     game.tick(99);
     expect(game.snapshot(99).index).toBe(0);
     game.tick(100);
     expect(game.snapshot(100)).toMatchObject({ index: 1, misses: 0, score: 100 });
+  });
+
+  it('moves on after a pause when the letter was already right', () => {
+    const game = setup('Alpha Beta', { advanceOnHit: false, roundSize: 0 });
+    game.start(0);
+    game.press('a', 20);
+    game.pause();
+    expect(game.snapshot(30).responded).toBe(true);
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({ status: STATUS.PLAYING, index: 1 });
   });
 
   it('gives the current word a fresh window after pause', () => {
@@ -389,6 +404,15 @@ describe('game', () => {
     expect(game.snapshot()).toMatchObject({ status: STATUS.PLAYING, score: 0, recall: null });
   });
 
+  it('passes over punctuation-only tokens', () => {
+    const game = setup('... Next');
+    game.start(0);
+    game.tick(100);
+    expect(game.snapshot(100)).toMatchObject({ index: 1, misses: 0, answer: 'N' });
+  });
+});
+
+describe('playing a pace', () => {
   it('holds a Linger word for the full window, then freezes briefly', () => {
     const game = setup('Concept is', { roundSize: 0 });
     game.setConfig(pacePatch(PACE_PRESETS.linger));
@@ -436,17 +460,14 @@ describe('game', () => {
     const game = setup('Alpha Beta', { advanceOnHit: false, roundSize: 0 });
     game.setConfig(pacePatch(PACE_PRESETS.warmup));
     expect(game.config.advanceOnHit).toBe(false);
-    expect(game.config).toMatchObject({ wpm: 70, forgivenessMs: 600, showTargetHud: true });
+    expect(game.config).toMatchObject({
+      wpm: PACE_PRESETS.warmup.wpm,
+      forgivenessMs: PACE_PRESETS.warmup.forgivenessMs,
+      showTargetHud: PACE_PRESETS.warmup.showTargetHud,
+    });
 
     game.start(0);
     expect(game.press('a', 40)).toBe(true);
     expect(game.snapshot(40)).toMatchObject({ status: STATUS.PLAYING, index: 0, hits: 1 });
-  });
-
-  it('passes over punctuation-only tokens', () => {
-    const game = setup('... Next');
-    game.start(0);
-    game.tick(100);
-    expect(game.snapshot(100)).toMatchObject({ index: 1, misses: 0, answer: 'N' });
   });
 });

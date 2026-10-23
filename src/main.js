@@ -125,7 +125,7 @@ function handleEvent(event) {
       live,
       game.status === 'finished'
         ? 'Article complete.'
-        : 'Round complete. Press space to continue.',
+        : 'Round complete. Press Space to continue.',
     );
     return;
   }
@@ -149,7 +149,7 @@ function handleEvent(event) {
   }
 
   if (event.type === 'pause') {
-    setText(live, 'Paused. Press space to resume.');
+    setText(live, 'Paused. Press Space to resume.');
     return;
   }
 
@@ -158,7 +158,7 @@ function handleEvent(event) {
       live,
       event.recall
         ? 'Round complete. Which word was in that round?'
-        : 'Round complete. Press space to continue.',
+        : 'Round complete. Press Space to continue.',
     );
     return;
   }

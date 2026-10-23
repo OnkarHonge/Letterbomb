@@ -1,6 +1,18 @@
 import { must, setText } from './dom.js';
 import { scrollTopToReveal } from './scroll.js';
 
+export function missRule(freezeSec) {
+  return freezeSec > 0
+    ? 'Hits build a streak. A miss freezes the board, then you continue.'
+    : 'Hits build a streak. A miss moves straight on.';
+}
+
+export function pauseRule(responded) {
+  return responded
+    ? 'That letter already counted. Resume moves on. Click a word to move the highlight.'
+    : 'This word starts fresh when you resume. Click a word to move the highlight.';
+}
+
 function recallMount(prefix) {
   return {
     root: must(`${prefix}-recall`),
@@ -100,6 +112,8 @@ export function createPainter() {
   const panelDone = must('panel-done');
   const idleBest = must('idle-best');
   const idleRound = must('idle-round');
+  const idleMiss = must('idle-miss');
+  const pauseCopy = must('pause-copy');
   const idleStart = must('idle-start');
   const breakTitle = must('break-title');
   const breakCopy = must('break-copy');
@@ -277,7 +291,7 @@ export function createPainter() {
     if (!snap.word) {
       targetValue = '—';
     } else if (!snap.isTarget) {
-      targetLabel = playing ? 'Read' : 'Up next';
+      targetLabel = playing ? 'No key' : 'Up next';
     } else if (!config.showTargetHud && snap.status === 'playing') {
       targetLabel = 'First letter';
       targetValue = '•';
@@ -320,10 +334,12 @@ export function createPainter() {
         ? `That key was ${snap.missedKey}. This letter is ${snap.answer}.`
         : `Time ran out. This letter is ${snap.answer}.`;
       setText(strikeText, sentence);
-      setText(strikeSub, `Moving on in ${Math.max(0, snap.freezeLeftMs / 1000).toFixed(1)}s`);
+      setText(strikeSub, `Moving on in ${Math.max(0, snap.freezeLeftMs / 1000).toFixed(1)} s`);
     }
 
     pauseBar.hidden = snap.status !== 'paused';
+    setText(pauseCopy, pauseRule(snap.responded));
+    setText(idleMiss, missRule(config.freezeSec));
     const showOverlay = snap.status === 'idle' || snap.status === 'break' || snap.status === 'finished';
     overlay.hidden = !showOverlay;
     panelIdle.hidden = snap.status !== 'idle';

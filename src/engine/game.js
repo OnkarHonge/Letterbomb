@@ -362,6 +362,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
         : null,
       answer: word?.isTarget ? word.targetChar : null,
       isTarget: Boolean(word?.isTarget),
+      responded,
       missReason,
       missedKey,
       freezeLeftMs,
