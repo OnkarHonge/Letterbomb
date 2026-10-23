@@ -1,4 +1,7 @@
-const FILTERS = new Set(['all', 'long', 'vowel', 'capital']);
+export const FILTERS = new Set(['all', 'long', 'vowel', 'capital']);
+export const LONG_WORD_LETTERS = 4;
+export const VOWELS = 'AEIOU';
+export const PUNCTUATION_MARKS = '.!?,;:…';
 
 export function normalizeKey(raw) {
   if (typeof raw !== 'string' || raw.length === 0) return null;
@@ -46,7 +49,7 @@ function annotate(original, id, filter, breakBefore) {
     displayChar: '',
     after: '',
     targetChar: null,
-    hasPunctuation: /[.!?,;:…]/.test(original),
+    hasPunctuation: [...PUNCTUATION_MARKS].some((mark) => original.includes(mark)),
     isLong: false,
     isVowel: false,
     isCapital: false,
@@ -66,8 +69,8 @@ function annotate(original, id, filter, breakBefore) {
     displayChar,
     after: original.slice(index + displayChar.length),
     targetChar,
-    isLong: letters.length > 3,
-    isVowel: Boolean(targetChar && 'AEIOU'.includes(targetChar)),
+    isLong: letters.length >= LONG_WORD_LETTERS,
+    isVowel: Boolean(targetChar && VOWELS.includes(targetChar)),
     isCapital: isUpperLetter(displayChar),
   };
   word.isTarget = isTargetWord(word, filter);

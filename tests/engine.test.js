@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, sanitizeConfig } from '../src/engine/config.js';
-import { applyFilter, countWords, parseText } from '../src/engine/parseText.js';
+import {
+  LONG_WORD_LETTERS,
+  PUNCTUATION_MARKS,
+  VOWELS,
+  applyFilter,
+  countWords,
+  parseText,
+} from '../src/engine/parseText.js';
 import { pointsForHit } from '../src/engine/scoring.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
@@ -27,6 +34,21 @@ describe('parseText', () => {
     expect(word.targetChar).toBe('E');
     expect(word.isCapital).toBe(true);
     expect(word.isVowel).toBe(true);
+  });
+
+  it('uses one punctuation set and one length for a long word', () => {
+    expect(PUNCTUATION_MARKS).toBe('.!?,;:…');
+    expect(VOWELS).toBe('AEIOU');
+    for (const mark of PUNCTUATION_MARKS) {
+      expect(parseText(`word${mark}`)[0].hasPunctuation).toBe(true);
+    }
+    expect(parseText('word')[0].hasPunctuation).toBe(false);
+    expect(parseText('a'.repeat(LONG_WORD_LETTERS))[0].isLong).toBe(true);
+    expect(parseText('a'.repeat(LONG_WORD_LETTERS - 1))[0].isLong).toBe(false);
+    for (const letter of VOWELS) {
+      expect(parseText(letter.toLowerCase())[0].isVowel).toBe(true);
+    }
+    expect(parseText('y')[0].isVowel).toBe(false);
   });
 
   it('marks punctuation and word shape', () => {

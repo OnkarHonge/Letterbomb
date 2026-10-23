@@ -1,3 +1,5 @@
+import { FILTERS } from './parseText.js';
+
 export const LIMITS = {
   wpm: [10, 800],
   forgivenessMs: [0, 800],
@@ -86,9 +88,8 @@ export function pacePatch(preset) {
   return patch;
 }
 
-const VIEW_MODES = new Set(['karaoke', 'rsvp']);
-const FILTERS = new Set(['all', 'long', 'vowel', 'capital']);
-const THEMES = new Set(['signal', 'paper', 'night', 'contrast']);
+export const VIEW_MODES = new Set(['karaoke', 'rsvp']);
+export const THEMES = new Set(['signal', 'paper', 'night', 'contrast']);
 
 export function sanitizeConfig(input) {
   const source = input && typeof input === 'object' ? input : {};
