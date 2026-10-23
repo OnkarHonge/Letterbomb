@@ -1,5 +1,5 @@
 import { must, setText } from './dom.js';
-import { scrollTopToReveal } from './scroll.js';
+import { nextLineUnder, scrollTopForReadingLine } from './scroll.js';
 
 export function missRule(freezeSec) {
   return freezeSec > 0
@@ -216,14 +216,25 @@ export function createPainter() {
     karaoke.replaceChildren(fragment);
   }
 
+  function previewBelow(el) {
+    const words = [...karaoke.querySelectorAll('.word')].map((word) => ({
+      top: word.offsetTop,
+      height: word.offsetHeight,
+    }));
+    return nextLineUnder(words, el.offsetTop, el.offsetHeight);
+  }
+
   function reveal(el) {
     if (!el || karaoke.hidden) return;
-    const next = scrollTopToReveal(
-      karaoke.scrollTop,
-      karaoke.clientHeight,
-      el.offsetTop,
-      el.offsetHeight,
-    );
+    const { lineHeight, nextLineBottom } = previewBelow(el);
+    const next = scrollTopForReadingLine({
+      scrollTop: karaoke.scrollTop,
+      viewHeight: karaoke.clientHeight,
+      wordTop: el.offsetTop,
+      wordHeight: el.offsetHeight,
+      lineHeight,
+      nextLineBottom,
+    });
     if (Math.abs(next - karaoke.scrollTop) >= 1) karaoke.scrollTop = next;
   }
 
