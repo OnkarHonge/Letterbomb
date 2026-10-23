@@ -29,24 +29,24 @@ export const DEFAULT_CONFIG = {
 export const PACE_PRESETS = {
   warmup: {
     label: 'Warmup',
-    wpm: 110,
-    forgivenessMs: 420,
+    wpm: 70,
+    forgivenessMs: 600,
     freezeSec: 0.5,
     showTargetHud: true,
   },
   flow: {
     label: 'Flow',
-    wpm: 170,
-    forgivenessMs: 240,
-    freezeSec: 0.8,
+    wpm: 110,
+    forgivenessMs: 420,
+    freezeSec: 0.5,
     showTargetHud: true,
   },
   reflex: {
     label: 'Reflex',
-    wpm: 360,
-    forgivenessMs: 40,
-    freezeSec: 1,
-    showTargetHud: false,
+    wpm: 170,
+    forgivenessMs: 240,
+    freezeSec: 0.8,
+    showTargetHud: true,
   },
 };
 
