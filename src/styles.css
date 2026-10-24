@@ -279,7 +279,11 @@ h3 {
 #round-meta { color: var(--accent); font-weight: 800; white-space: nowrap; }
 
 .timer {
+  /* overflow:hidden lets Safari shrink this item to 0 once the article
+     is in the column. The bar keeps its height. */
+  flex: 0 0 auto;
   height: 8px;
+  min-height: 8px;
   margin: 8px 0 10px;
   overflow: hidden;
   border-radius: 99px;
@@ -335,13 +339,17 @@ h3 {
 .stage {
   position: relative;
   flex: 1 1 auto;
-  min-height: 2.8rem;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 .karaoke, .rsvp {
-  flex: 1;
+  /* 0px, not 0%: Safari treats a percentage basis as the content height
+     and then the column crushes the time bar. */
+  flex: 1 1 0px;
   min-height: 0;
+  min-width: 0;
   width: min(40rem, 100%);
   margin-inline: auto;
 }

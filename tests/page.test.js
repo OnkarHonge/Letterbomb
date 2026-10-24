@@ -259,3 +259,21 @@ describe('gap beat layout', () => {
     expect(decl(rule('.word.is-gap'), 'flex-shrink')).toBe('0');
   });
 });
+
+describe('time bar layout', () => {
+  it('keeps the bar from shrinking once the article is in the column', () => {
+    const timer = rule('.timer');
+    expect(decl(timer, 'flex')).toBe('0 0 auto');
+    expect(decl(timer, 'height')).toBe('8px');
+    expect(decl(timer, 'min-height')).toBe('8px');
+
+    const stage = rule('.stage');
+    expect(decl(stage, 'min-height')).toBe('0');
+    expect(decl(stage, 'min-width')).toBe('0');
+
+    const scroller = rule('.karaoke, .rsvp');
+    expect(decl(scroller, 'flex')).toBe('1 1 0px');
+    expect(decl(scroller, 'min-height')).toBe('0');
+    expect(decl(scroller, 'min-width')).toBe('0');
+  });
+});
