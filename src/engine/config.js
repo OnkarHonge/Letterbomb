@@ -8,6 +8,7 @@ export const LIMITS = {
   openingMultiplier: [1, 3],
   fontScale: [0.85, 1.6],
   roundSize: [0, 200],
+  spotLookMs: [200, 800],
 };
 
 export const DEFAULT_CONFIG = {
@@ -28,6 +29,8 @@ export const DEFAULT_CONFIG = {
   focusMode: false,
   fontScale: 1,
   roundSize: 40,
+  spotCheck: false,
+  spotLookMs: 350,
 };
 
 export const PACE_PRESETS = {
@@ -133,6 +136,7 @@ export function sanitizeConfig(input) {
   );
   config.fontScale = clampNum(config.fontScale, LIMITS.fontScale, DEFAULT_CONFIG.fontScale, 2);
   config.roundSize = clampInt(config.roundSize, LIMITS.roundSize, DEFAULT_CONFIG.roundSize);
+  config.spotLookMs = clampInt(config.spotLookMs, LIMITS.spotLookMs, DEFAULT_CONFIG.spotLookMs);
   config.viewMode = VIEW_MODES.has(config.viewMode) ? config.viewMode : DEFAULT_CONFIG.viewMode;
   config.filter = FILTERS.has(config.filter) ? config.filter : DEFAULT_CONFIG.filter;
   config.theme = THEMES.has(config.theme) ? config.theme : DEFAULT_CONFIG.theme;
@@ -143,6 +147,7 @@ export function sanitizeConfig(input) {
   config.reducedMotion = asBool(config.reducedMotion, DEFAULT_CONFIG.reducedMotion);
   config.showKeypad = asBool(config.showKeypad, DEFAULT_CONFIG.showKeypad);
   config.focusMode = asBool(config.focusMode, DEFAULT_CONFIG.focusMode);
+  config.spotCheck = asBool(config.spotCheck, DEFAULT_CONFIG.spotCheck);
 
   return config;
 }

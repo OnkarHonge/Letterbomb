@@ -3,6 +3,7 @@ import { PACE_PRESETS, pacePatch } from '../src/engine/config.js';
 import { createGame, STATUS } from '../src/engine/game.js';
 import { recallBounds, selectTarget } from '../src/engine/recall.js';
 import { RECALL_BONUS } from '../src/engine/scoring.js';
+import { SPOT_REVEAL_MS } from '../src/engine/spot.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
 const CLOZE = 'Bravo quietly rests. Delta gently stays. Foxtrot softly leaves. Hotel calmly waits.';
@@ -642,5 +643,275 @@ describe('opening pause', () => {
     expect(game.snapshot(0).deadlineMs).toBe(200);
     game.setConfig({ openingMultiplier: 3 });
     expect(game.snapshot(0).deadlineMs).toBe(300);
+  });
+});
+
+describe('spot check', () => {
+  function sequence(...values) {
+    let index = 0;
+    return () => values[Math.min(index++, values.length - 1)];
+  }
+
+  it('leaves an ordinary word on the first letter', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200 });
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({
+      spot: { phase: 'look', cueIndex: 0 },
+      answer: null,
+      deadlineMs: 200,
+    });
+    expect(game.press('w', 20)).toBe(false);
+    expect(game.snapshot(20)).toMatchObject({ index: 0, misses: 0, score: 0 });
+
+    game.tick(199);
+    expect(game.snapshot(199).spot.phase).toBe('look');
+    game.tick(200);
+    expect(game.snapshot(200)).toMatchObject({
+      spot: { phase: 'answer', cueIndex: 0 },
+      answer: null,
+      deadlineMs: 100,
+      misses: 0,
+    });
+
+    expect(game.press('w', 220)).toBe(true);
+    expect(game.consumeEvents().find((event) => event.type === 'hit').reaction).toBe(20);
+    expect(game.snapshot(220)).toMatchObject({
+      index: 0,
+      score: 100,
+      spot: { phase: 'reveal' },
+      answer: 'W',
+    });
+    game.tick(220 + SPOT_REVEAL_MS - 1);
+    expect(game.snapshot(619).index).toBe(0);
+    game.tick(220 + SPOT_REVEAL_MS);
+    expect(game.snapshot(620)).toMatchObject({
+      index: 1,
+      spot: null,
+      answer: 'B',
+      score: 100,
+    });
+    expect(game.press('b', 650)).toBe(true);
+    expect(game.status).toBe(STATUS.FINISHED);
+  });
+
+  it('asks for the marked letter, not the first one', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200, freezeSec: 1 }, sequence(0, 0.8));
+    game.start(0);
+    game.tick(200);
+    expect(game.snapshot(200).spot.cueIndex).toBe(3);
+    expect(game.press('w', 220)).toBe(true);
+    expect(game.consumeEvents().find((event) => event.type === 'miss')).toMatchObject({
+      answer: 'D',
+      pressed: 'W',
+    });
+    expect(game.snapshot(220)).toMatchObject({
+      status: STATUS.FROZEN,
+      answer: 'D',
+      spot: { phase: 'answer', cueIndex: 3 },
+      misses: 1,
+    });
+    game.tick(1220);
+    expect(game.snapshot(1220)).toMatchObject({ index: 1, answer: 'B', spot: null });
+  });
+
+  it('still takes the short beat when advance-on-hit is off', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200, advanceOnHit: false });
+    game.start(0);
+    game.tick(200);
+    game.press('w', 210);
+    game.tick(210 + SPOT_REVEAL_MS);
+    expect(game.snapshot(610)).toMatchObject({ index: 1, answer: 'B' });
+    game.press('b', 630);
+    expect(game.snapshot(630)).toMatchObject({ index: 1, hits: 2, responded: true });
+  });
+
+  it('keeps short words on the first letter', () => {
+    const game = setup('to Word', { spotCheck: true, spotLookMs: 200 });
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({ answer: 'T', spot: null, index: 0 });
+    game.press('t', 20);
+    expect(game.snapshot(20)).toMatchObject({ index: 1, spot: { phase: 'look' }, answer: null });
+  });
+
+  it('restarts the look after a pause, and restarts only the answer once the blocks are up', () => {
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200 });
+    game.start(0);
+    game.tick(150);
+    game.pause();
+    game.resume(1000);
+    expect(game.snapshot(1000)).toMatchObject({ spot: { phase: 'look', cueIndex: 0 }, deadlineMs: 200 });
+    game.tick(1199);
+    expect(game.snapshot(1199).spot.phase).toBe('look');
+    game.tick(1200);
+    expect(game.snapshot(1200).spot.phase).toBe('answer');
+    game.tick(1250);
+    game.pause();
+    game.resume(2000);
+    expect(game.snapshot(2000)).toMatchObject({
+      spot: { phase: 'answer', cueIndex: 0 },
+      answer: null,
+      deadlineMs: 100,
+    });
+    expect(game.press('w', 2050)).toBe(true);
+    expect(game.snapshot(2050).spot.phase).toBe('reveal');
+  });
+
+  it('stretches the look on the opening word', () => {
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200, openingMultiplier: 2 });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(400);
+    game.tick(400);
+    expect(game.snapshot(400)).toMatchObject({ spot: { phase: 'answer' }, deadlineMs: 200 });
+  });
+
+  it('can be turned on during a pause, and a pace leaves it alone', () => {
+    const game = setup('Word Beta', { spotLookMs: 400 });
+    game.setConfig({ spotCheck: true, spotLookMs: 400 });
+    game.setConfig(pacePatch(PACE_PRESETS.linger));
+    expect(game.config.spotCheck).toBe(true);
+    expect(game.config.spotLookMs).toBe(400);
+
+    const quiet = setup('Word', { spotCheck: false, spotLookMs: 200 });
+    quiet.start(0);
+    expect(quiet.snapshot(0).spot).toBeNull();
+    quiet.pause();
+    quiet.setConfig({ spotCheck: true });
+    quiet.resume(50);
+    expect(quiet.snapshot(50).spot.phase).toBe('look');
+    quiet.pause();
+    quiet.setConfig({ spotCheck: false });
+    quiet.resume(80);
+    expect(quiet.snapshot(80)).toMatchObject({ spot: null, answer: 'W' });
+    expect(quiet.press('w', 100)).toBe(true);
+  });
+
+  it('drops the spot check before the breath screen', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200, roundSize: 1 });
+    game.start(0);
+    game.tick(200);
+    game.press('w', 220);
+    game.tick(220 + SPOT_REVEAL_MS);
+    expect(game.snapshot(620)).toMatchObject({ status: STATUS.BREAK, index: 1, spot: null });
+  });
+
+  it('stretches the look on a word with punctuation', () => {
+    const game = setup('Word, Beta', { spotCheck: true, spotLookMs: 200, punctuationMultiplier: 2 });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(400);
+    game.tick(399);
+    expect(game.snapshot(399).spot.phase).toBe('look');
+    game.tick(400);
+    expect(game.snapshot(400)).toMatchObject({ spot: { phase: 'answer' }, deadlineMs: 200, misses: 0 });
+  });
+
+  it('reports the marked letter when the answer window ends', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200 }, sequence(0, 0.8));
+    game.start(0);
+    game.tick(200);
+    game.tick(299);
+    expect(game.snapshot(299)).toMatchObject({ index: 0, misses: 0 });
+    game.tick(300);
+    expect(game.consumeEvents().find((event) => event.type === 'miss')).toMatchObject({
+      reason: 'timeout',
+      answer: 'D',
+      pressed: null,
+    });
+    expect(game.snapshot(300)).toMatchObject({ index: 1, answer: 'B', misses: 1, spot: null });
+  });
+
+  it('ignores a key during the reveal and does not let a look press block the answer', () => {
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200 });
+    game.start(0);
+    expect(game.press('w', 190)).toBe(false);
+    game.tick(200);
+    expect(game.press('w', 210)).toBe(true);
+    expect(game.press('z', 230)).toBe(false);
+    expect(game.snapshot(230)).toMatchObject({
+      index: 0,
+      misses: 0,
+      score: 100,
+      spot: { phase: 'reveal' },
+    });
+    game.tick(210 + SPOT_REVEAL_MS - 1);
+    expect(game.status).toBe(STATUS.PLAYING);
+  });
+
+  it('follows the look slider while that word is still up', () => {
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200 });
+    game.start(0);
+    game.setConfig({ spotLookMs: 500 });
+    expect(game.snapshot(0).deadlineMs).toBe(500);
+    game.tick(499);
+    expect(game.snapshot(499).spot.phase).toBe('look');
+    game.tick(500);
+    expect(game.snapshot(500).spot.phase).toBe('answer');
+  });
+
+  it('keeps the assigned letter when the highlight moves during a pause', () => {
+    const game = setup(
+      'Word Beta Golf Room Kind Note Jump Vivid Extra Lucky',
+      { spotCheck: true, spotLookMs: 200 },
+    );
+    game.start(0);
+    game.pause();
+    expect(game.jumpTo(5)).toBe(true);
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({
+      index: 5,
+      answer: null,
+      spot: { phase: 'look', cueIndex: 0 },
+    });
+    game.pause();
+    game.jumpTo(1);
+    game.resume(80);
+    expect(game.snapshot(80)).toMatchObject({ index: 1, spot: null, answer: 'B' });
+  });
+
+  it('gives a covered look the opening pause', () => {
+    const game = setup('to Word', { spotCheck: true, spotLookMs: 200, openingMultiplier: 2 });
+    game.start(0);
+    game.press('t', 20);
+    expect(game.snapshot(20)).toMatchObject({ index: 1, deadlineMs: 200, spot: { phase: 'look' } });
+    game.pause();
+    game.cover();
+    game.resume(50);
+    expect(game.snapshot(50).deadlineMs).toBe(400);
+  });
+
+  it('accepts the folded key for an accented spot check', () => {
+    const game = setup('Éclair', { spotCheck: true, spotLookMs: 200 });
+    game.start(0);
+    expect(game.snapshot(0).deadlineMs).toBe(260);
+    game.tick(260);
+    expect(game.press('é', 280)).toBe(true);
+    expect(game.snapshot(280)).toMatchObject({ score: 100, spot: { phase: 'reveal' }, answer: 'E' });
+  });
+
+  it('can mark a digit', () => {
+    const game = setup('beta4', { spotCheck: true, spotLookMs: 200 }, sequence(0.99));
+    game.start(0);
+    game.tick(200);
+    expect(game.snapshot(200).spot.cueIndex).toBe(4);
+    expect(game.press('4', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({ score: 100, answer: '4' });
+  });
+
+  it('spot-checks the long words when short words are filtered out', () => {
+    const game = setup('to Word', { spotCheck: true, spotLookMs: 200, filter: 'long' });
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({ index: 0, isTarget: false, spot: null });
+    game.tick(100);
+    expect(game.snapshot(100)).toMatchObject({ index: 1, spot: { phase: 'look' }, answer: null, misses: 0 });
+  });
+
+  it('picks again when the article is read again', () => {
+    const rolls = [0, 0, 0, 0.8];
+    let index = 0;
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200 }, () => rolls[index++]);
+    game.start(0);
+    expect(game.snapshot(0).spot.cueIndex).toBe(0);
+    game.load('Word', 'Fixture');
+    game.start(10);
+    expect(game.snapshot(10).spot.cueIndex).toBe(3);
   });
 });

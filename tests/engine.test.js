@@ -136,5 +136,9 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({ openingMultiplier: 9 }).openingMultiplier).toBe(3);
     expect(sanitizeConfig({ openingMultiplier: 0 }).openingMultiplier).toBe(1);
     expect(sanitizeConfig({ wpm: 150 }).openingMultiplier).toBe(DEFAULT_CONFIG.openingMultiplier);
+    expect(sanitizeConfig({ spotLookMs: 10 }).spotLookMs).toBe(200);
+    expect(sanitizeConfig({ spotLookMs: 5000 }).spotLookMs).toBe(800);
+    expect(sanitizeConfig({ spotCheck: 'yes' }).spotCheck).toBe(false);
+    expect(sanitizeConfig({}).spotCheck).toBe(false);
   });
 });

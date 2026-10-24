@@ -2,6 +2,7 @@ import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, normalizeKey, parseText } from './parseText.js';
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
+import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
 import { wordDeadlineMs } from './timing.js';
 
 /**
@@ -49,6 +50,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let reactionTimes = [];
   let recall = null;
   let events = [];
+  let spots = new Map();
+  let spotPhase = null;
 
   function emit(event) {
     events.push(event);
@@ -64,9 +67,53 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     recall = null;
   }
 
+  function withOpening(word) {
+    if (!opening || !word) return word;
+    return { ...word, isOpening: true };
+  }
+
   function deadlineFor(word) {
-    if (!opening || !word) return wordDeadlineMs(word, config);
-    return wordDeadlineMs({ ...word, isOpening: true }, config);
+    return wordDeadlineMs(withOpening(word), config);
+  }
+
+  function lookFor(word) {
+    return spotLookMs(withOpening(word), config);
+  }
+
+  function isSpot(word) {
+    return Boolean(config.spotCheck && word?.isTarget && word.isLong && spots.has(word.id));
+  }
+
+  function cueFor(word) {
+    return isSpot(word) ? spots.get(word.id) : null;
+  }
+
+  function owedKey(word) {
+    return cueFor(word)?.key ?? word?.targetChar ?? null;
+  }
+
+  function phaseDeadline(word) {
+    if (spotPhase === 'reveal') return SPOT_REVEAL_MS;
+    if (spotPhase === 'look' && isSpot(word)) return lookFor(word);
+    return deadlineFor(word);
+  }
+
+  function fillSpots() {
+    spots = new Map();
+    if (!config.spotCheck) return;
+    for (const id of pickSpotIds(words, random)) {
+      const word = words[id];
+      if (!word || word.id !== id) continue;
+      const cue = pickCue(word.original, random);
+      if (!cue) continue;
+      spots.set(id, { index: cue.index, key: cue.key });
+    }
+  }
+
+  function enterAnswer(at) {
+    spotPhase = 'answer';
+    wordStartedAt = at;
+    deadlineMs = deadlineFor(words[index]);
   }
 
   function beginWord(at) {
@@ -78,7 +125,13 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     const word = words[index];
     opening = Boolean(word?.isTarget && pendingOpening);
     if (opening) pendingOpening = false;
-    deadlineMs = deadlineFor(word);
+    if (isSpot(word)) {
+      spotPhase = 'look';
+      deadlineMs = lookFor(word);
+    } else {
+      spotPhase = null;
+      deadlineMs = deadlineFor(word);
+    }
     emit({ type: 'word', index });
   }
 
@@ -94,6 +147,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function finish() {
     status = STATUS.FINISHED;
     responded = false;
+    spotPhase = null;
     opening = false;
     missReason = null;
     missedKey = null;
@@ -115,6 +169,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (config.roundSize > 0 && doneInRound >= config.roundSize) {
       status = STATUS.BREAK;
       responded = false;
+      spotPhase = null;
       opening = false;
       missReason = null;
       missedKey = null;
@@ -137,6 +192,12 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     responded = true;
     emit({ type: 'hit', points, reaction, streak, score, maxStreak });
     if (streak % 10 === 0) emit({ type: 'milestone', streak });
+    if (spotPhase === 'answer') {
+      spotPhase = 'reveal';
+      wordStartedAt = at;
+      deadlineMs = SPOT_REVEAL_MS;
+      return;
+    }
     if (config.advanceOnHit) advance(at);
   }
 
@@ -149,7 +210,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     emit({
       type: 'miss',
       reason,
-      answer: words[index]?.targetChar ?? null,
+      answer: owedKey(words[index]),
       pressed,
     });
 
@@ -177,6 +238,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     held = false;
     opening = false;
     pendingOpening = false;
+    spotPhase = null;
+    spots = new Map();
     lastPressAt = Number.NEGATIVE_INFINITY;
     epoch += 1;
     emit({ type: 'load', total: words.length });
@@ -185,13 +248,24 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
   function setConfig(partial) {
     const previousFilter = config.filter;
+    const wasSpot = config.spotCheck;
     config = sanitizeConfig({ ...config, ...partial });
     if (config.filter !== previousFilter) {
       words = applyFilter(words, config.filter);
       epoch += 1;
     }
+    if (
+      config.spotCheck
+      && !wasSpot
+      && spots.size === 0
+      && status !== STATUS.IDLE
+      && status !== STATUS.FINISHED
+    ) {
+      fillSpots();
+    }
+    if (!config.spotCheck && spotPhase && spotPhase !== 'reveal') spotPhase = null;
     if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
-      deadlineMs = deadlineFor(words[index]);
+      deadlineMs = phaseDeadline(words[index]);
     }
     return { ...config };
   }
@@ -207,6 +281,9 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     missReason = null;
     missedKey = null;
     lastPressAt = Number.NEGATIVE_INFINITY;
+    spots = new Map();
+    spotPhase = null;
+    if (config.spotCheck) fillSpots();
     emit({ type: 'start' });
     pendingOpening = true;
     beginWord(at);
@@ -229,6 +306,17 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     }
     if (responded) {
       advance(at);
+      return true;
+    }
+    const word = words[index];
+    if (spotPhase === 'answer' && isSpot(word)) {
+      if (pendingOpening) {
+        opening = true;
+        pendingOpening = false;
+      }
+      status = STATUS.PLAYING;
+      wordStartedAt = at;
+      deadlineMs = deadlineFor(word);
       return true;
     }
     if (opening) pendingOpening = true;
@@ -264,6 +352,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     missReason = null;
     missedKey = null;
     opening = false;
+    spotPhase = null;
     deadlineMs = deadlineFor(words[index]);
     emit({ type: 'jump', index });
     return true;
@@ -317,11 +406,14 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (at - lastPressAt < INPUT_LOCK_MS) return false;
     const word = words[index];
     if (!word?.isTarget || responded) return false;
+    if (spotPhase === 'look' || spotPhase === 'reveal') return false;
     if (at - wordStartedAt >= deadlineMs) return false;
     const key = normalizeKey(raw);
     if (!key) return false;
+    const expected = spotPhase === 'answer' ? cueFor(word)?.key : word.targetChar;
+    if (!expected) return false;
     lastPressAt = at;
-    if (key === word.targetChar) hit(at);
+    if (key === expected) hit(at);
     else miss('wrong', at, key);
     return true;
   }
@@ -343,9 +435,33 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
     if (at - wordStartedAt >= deadlineMs) {
       const word = words[index];
+      if (spotPhase === 'look') {
+        enterAnswer(at);
+        return;
+      }
+      if (spotPhase === 'reveal') {
+        advance(at);
+        return;
+      }
       if (word.isTarget && !responded) miss('timeout', at, null);
       else advance(at);
     }
+  }
+
+  function snapshotAnswer(word) {
+    if (!word?.isTarget) return null;
+    if (isSpot(word) && spotPhase) {
+      if (spotPhase === 'reveal' || status === STATUS.FROZEN) return spots.get(word.id).key;
+      return null;
+    }
+    return word.targetChar;
+  }
+
+  function spotView(word) {
+    if (!spotPhase || !isSpot(word)) return null;
+    const cue = spots.get(word.id);
+    if (!cue) return null;
+    return { phase: spotPhase, cueIndex: cue.index };
   }
 
   function snapshot(at = now()) {
@@ -382,7 +498,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       avgReaction: reactionTimes.length
         ? Math.round(reactionTimes.reduce((sum, value) => sum + value, 0) / reactionTimes.length)
         : null,
-      answer: word?.isTarget ? word.targetChar : null,
+      answer: snapshotAnswer(word),
+      spot: spotView(word),
       isTarget: Boolean(word?.isTarget),
       responded,
       missReason,
