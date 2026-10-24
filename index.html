@@ -109,6 +109,7 @@
             <button type="button" id="idle-start" class="btn btn-primary btn-large">Start</button>
             <p class="hint">Space also starts, pauses, and resumes.</p>
             <p id="idle-round" class="hint"></p>
+            <p id="idle-spot" class="hint" hidden></p>
             <p id="idle-best" class="hint" hidden></p>
           </div>
           <div id="panel-break" class="panel" hidden>
@@ -230,6 +231,15 @@
           <option value="capital">Starts with a capital</option>
         </select>
         <span class="field-help">Other words stay in the sentence and dim. You only press on the bright ones.</span>
+      </label>
+      <label class="check">
+        <span><strong>Spot check</strong><p>About one in five longer words stays readable, then turns into blocks. Press the marked one. Shorter words keep the first letter.</p></span>
+        <input id="cfg-spot" type="checkbox">
+      </label>
+      <label class="field">
+        <span class="field-top"><span>Look</span><b id="cfg-look-val">350 ms</b></span>
+        <input id="cfg-look" type="range" min="200" max="800" step="10" value="350">
+        <span class="field-help">How long that word stays readable before the blocks. Longer words get a little more. Punctuation and the opening pause stretch it.</span>
       </label>
 
       <h3>How it looks</h3>

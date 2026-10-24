@@ -384,6 +384,32 @@ h3 {
   color: inherit;
   text-decoration: none;
 }
+.block {
+  position: relative;
+  display: inline-block;
+  min-width: 0.55em;
+  color: transparent;
+  user-select: none;
+  vertical-align: baseline;
+}
+.block::before {
+  content: "";
+  position: absolute;
+  left: 0.08em;
+  right: 0.08em;
+  top: 0.42em;
+  height: 0.58em;
+  border-radius: 0.14em;
+  background: var(--muted);
+  opacity: 0.45;
+}
+.word.active .block.is-marked::before,
+.rsvp-current .block.is-marked::before {
+  background: var(--accent);
+  opacity: 1;
+  top: 0.22em;
+  height: 0.78em;
+}
 .break { flex-basis: 100%; height: 0.75em; }
 body.is-paused .word { cursor: pointer; }
 

@@ -10,6 +10,7 @@ import {
   recallHeading,
   recallPrompt,
   roundNote,
+  targetHud,
 } from '../src/ui/paint.js';
 import { wordWindowNote } from '../src/ui/settings.js';
 
@@ -69,6 +70,10 @@ describe('page and engine', () => {
     expect(checked('cfg-keypad')).toBe(DEFAULT_CONFIG.showKeypad);
     expect(checked('cfg-focus')).toBe(DEFAULT_CONFIG.focusMode);
     expect(checked('cfg-motion')).toBe(DEFAULT_CONFIG.reducedMotion);
+    expect(checked('cfg-spot')).toBe(DEFAULT_CONFIG.spotCheck);
+    expect(html).toContain(`>${DEFAULT_CONFIG.spotLookMs} ms<`);
+    expect(html).toContain('id="idle-spot"');
+    expect(html).toContain('then turns into blocks');
     expect(attr(html.match(/id="toggle-sound"[^>]*>/)[0], 'aria-pressed')).toBe(String(DEFAULT_CONFIG.sound));
     expect(attr(html.match(/id="toggle-focus"[^>]*>/)[0], 'aria-pressed')).toBe(String(DEFAULT_CONFIG.focusMode));
     expect(attr(html.match(/id="toggle-keypad"[^>]*>/)[0], 'aria-expanded')).toBe(String(DEFAULT_CONFIG.showKeypad));
@@ -115,6 +120,11 @@ describe('page and engine', () => {
     expect(font.min / 100).toBe(LIMITS.fontScale[0]);
     expect(font.max / 100).toBe(LIMITS.fontScale[1]);
     expect(font.value / 100).toBe(DEFAULT_CONFIG.fontScale);
+    expect(range('cfg-look')).toMatchObject({
+      min: LIMITS.spotLookMs[0],
+      max: LIMITS.spotLookMs[1],
+      value: DEFAULT_CONFIG.spotLookMs,
+    });
   });
 
   it('offers the same filters, views, and themes the engine accepts', () => {
@@ -141,6 +151,7 @@ describe('page and engine', () => {
     expect(missRule(0)).toBe('Hits build a streak. A miss moves straight on.');
     expect(missRule(0.8)).toContain('freezes the board');
     expect(pauseRule(false)).toContain('starts fresh');
+    expect(pauseRule(false, 'answer')).toContain('The blocks stay');
     expect(pauseRule(true)).toBe(
       'That letter already counted. Resume moves on. Click a word to move the highlight.',
     );
@@ -158,5 +169,41 @@ describe('page and engine', () => {
     expect(recallHeading('ready')).toBe('');
     expect(recallPrompt(false)).toBe('Round complete. Which word fills the blank?');
     expect(recallPrompt(true)).toBe('Article complete. Which word fills the blank?');
+  });
+
+  it('keeps the banner quiet during a spot check', () => {
+    const word = { original: 'Word' };
+    const base = { word, isTarget: true, config: { showTargetHud: true }, answer: 'W' };
+    expect(targetHud({ ...base, status: 'playing' })).toEqual({ label: 'First letter', value: 'W' });
+    expect(targetHud({ ...base, status: 'playing', config: { showTargetHud: false } })).toEqual({
+      label: 'First letter',
+      value: '•',
+    });
+    expect(targetHud({ ...base, status: 'idle' })).toEqual({ label: 'Up next', value: 'W' });
+    expect(targetHud({ word, isTarget: false, status: 'playing' })).toEqual({ label: 'No key', value: '—' });
+    expect(targetHud({
+      ...base,
+      status: 'playing',
+      answer: null,
+      spot: { phase: 'look', cueIndex: 3 },
+    })).toEqual({ label: 'Read', value: '•' });
+    expect(targetHud({
+      ...base,
+      status: 'playing',
+      answer: null,
+      spot: { phase: 'answer', cueIndex: 3 },
+    })).toEqual({ label: 'Marked block', value: '•' });
+    expect(targetHud({
+      ...base,
+      status: 'frozen',
+      answer: 'D',
+      spot: { phase: 'answer', cueIndex: 3 },
+    })).toEqual({ label: 'Letter', value: 'D' });
+    expect(targetHud({
+      ...base,
+      status: 'playing',
+      answer: 'D',
+      spot: { phase: 'reveal', cueIndex: 3 },
+    })).toEqual({ label: 'Letter', value: 'D' });
   });
 });

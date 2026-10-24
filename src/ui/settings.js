@@ -26,6 +26,9 @@ export function bindSettings(game, { onChange }) {
   const openingVal = must('cfg-opening-val');
   const round = must('cfg-round');
   const roundVal = must('cfg-round-val');
+  const look = must('cfg-look');
+  const lookVal = must('cfg-look-val');
+  const spot = must('cfg-spot');
   const font = must('cfg-font');
   const fontVal = must('cfg-font-val');
   const windowNote = must('cfg-window');
@@ -57,6 +60,7 @@ export function bindSettings(game, { onChange }) {
     setText(punctVal, `${config.punctuationMultiplier.toFixed(1)}×`);
     setText(openingVal, `${config.openingMultiplier.toFixed(1)}×`);
     setText(roundVal, config.roundSize === 0 ? 'No breaks' : `${config.roundSize} words`);
+    setText(lookVal, `${config.spotLookMs} ms`);
     setText(fontVal, `${Math.round(config.fontScale * 100)}%`);
     setText(windowNote, wordWindowNote(config));
   }
@@ -70,6 +74,7 @@ export function bindSettings(game, { onChange }) {
       punctuationMultiplier: Number(punct.value),
       openingMultiplier: Number(opening.value),
       roundSize: Number(round.value),
+      spotLookMs: Number(look.value),
       fontScale: Number(font.value) / 100,
       filter: filter.value,
       viewMode: viewRadios.find((radio) => radio.checked)?.value,
@@ -80,6 +85,7 @@ export function bindSettings(game, { onChange }) {
       showKeypad: keypad.checked,
       focusMode: focus.checked,
       reducedMotion: motion.checked,
+      spotCheck: spot.checked,
       ...(theme ? { theme } : {}),
     };
   }
@@ -99,6 +105,7 @@ export function bindSettings(game, { onChange }) {
     punct.value = String(config.punctuationMultiplier);
     opening.value = String(config.openingMultiplier);
     round.value = String(config.roundSize);
+    look.value = String(config.spotLookMs);
     font.value = String(Math.round(config.fontScale * 100));
     filter.value = config.filter;
     advance.checked = config.advanceOnHit;
@@ -108,16 +115,17 @@ export function bindSettings(game, { onChange }) {
     keypad.checked = config.showKeypad;
     focus.checked = config.focusMode;
     motion.checked = config.reducedMotion;
+    spot.checked = config.spotCheck;
     for (const radio of viewRadios) radio.checked = radio.value === config.viewMode;
     markChoice(themeButtons, 'theme', config.theme);
     markChoice(paceButtons, 'pace', matchingPace(config));
     paintLabels(config);
   }
 
-  for (const input of [wpm, forgive, freeze, punct, opening, round, font]) {
+  for (const input of [wpm, forgive, freeze, punct, opening, round, look, font]) {
     input.addEventListener('input', applyForm);
   }
-  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, ...viewRadios]) {
+  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, ...viewRadios]) {
     input.addEventListener('change', applyForm);
   }
 

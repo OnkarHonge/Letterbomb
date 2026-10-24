@@ -1,3 +1,4 @@
+import { cueChars, hiddenWordLabel, spotFace } from '../engine/spot.js';
 import { must, setText } from './dom.js';
 import {
   advanceScroll,
@@ -13,13 +14,33 @@ export function missRule(freezeSec) {
     : 'Hits build a streak. A miss moves straight on.';
 }
 
-export function pauseRule(responded) {
-  return responded
-    ? 'That letter already counted. Resume moves on. Click a word to move the highlight.'
-    : 'This word starts fresh when you resume. Click a word to move the highlight.';
+export function pauseRule(responded, phase) {
+  if (responded) {
+    return 'That letter already counted. Resume moves on. Click a word to move the highlight.';
+  }
+  if (phase === 'answer') {
+    return 'The blocks stay. Resume gives them a new timer. Click a word to move the highlight.';
+  }
+  return 'This word starts fresh when you resume. Click a word to move the highlight.';
 }
 
 export const RECALL_QUESTION = 'Which word fills the blank?';
+export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
+
+export function targetHud(snap) {
+  const playing = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
+  if (!snap.word) return { label: 'Up next', value: '—' };
+  if (!snap.isTarget) return { label: playing ? 'No key' : 'Up next', value: '—' };
+  if (snap.spot && playing) {
+    if (snap.spot.phase === 'look') return { label: 'Read', value: '•' };
+    if (snap.spot.phase === 'answer' && snap.status !== 'frozen') return { label: 'Marked block', value: '•' };
+    return { label: 'Letter', value: snap.answer || '—' };
+  }
+  if (!snap.config?.showTargetHud && snap.status === 'playing') {
+    return { label: 'First letter', value: '•' };
+  }
+  return { label: playing ? 'First letter' : 'Up next', value: snap.answer || '—' };
+}
 
 export function roundNote(roundSize) {
   return roundSize > 0
@@ -115,6 +136,7 @@ function fillSentence(node, parts) {
 
 function fillWord(node, word) {
   node.replaceChildren();
+  node.removeAttribute('aria-label');
   if (!word) return;
   if (!word.displayChar) {
     node.textContent = word.original;
@@ -125,6 +147,59 @@ function fillWord(node, word) {
   mark.className = 'first';
   mark.textContent = word.displayChar;
   node.append(mark, word.after);
+}
+
+function fillPieces(node, original, cueIndex, mode) {
+  node.replaceChildren();
+  const text = String(original);
+  const chars = cueChars(text);
+  let cursor = 0;
+  for (const item of chars) {
+    if (item.index > cursor) node.append(text.slice(cursor, item.index));
+    const raw = text.slice(item.index, item.index + item.length);
+    const marked = item.index === cueIndex;
+    if (mode === 'blocks') {
+      const block = document.createElement('span');
+      block.className = marked ? 'block is-marked' : 'block';
+      block.textContent = raw;
+      block.setAttribute('aria-hidden', 'true');
+      node.append(block);
+    } else if (marked) {
+      const mark = document.createElement('span');
+      mark.className = 'first';
+      mark.textContent = raw;
+      node.append(mark);
+    } else {
+      node.append(raw);
+    }
+    cursor = item.index + item.length;
+  }
+  if (cursor < text.length) node.append(text.slice(cursor));
+}
+
+function paintWord(node, word, spot, status) {
+  const face = spotFace(spot?.phase, status);
+  if (!word) {
+    node.replaceChildren();
+    node.removeAttribute('aria-label');
+    return;
+  }
+  if (face === 'plain') {
+    node.textContent = word.original;
+    node.removeAttribute('aria-label');
+    return;
+  }
+  if (face === 'blocks') {
+    fillPieces(node, word.original, spot.cueIndex, 'blocks');
+    node.setAttribute('aria-label', hiddenWordLabel(word.original, spot.cueIndex));
+    return;
+  }
+  if (face === 'cue') {
+    fillPieces(node, word.original, spot.cueIndex, 'cue');
+    node.removeAttribute('aria-label');
+    return;
+  }
+  fillWord(node, word);
 }
 
 export function createPainter() {
@@ -145,6 +220,7 @@ export function createPainter() {
   const panelBreak = must('panel-break');
   const panelDone = must('panel-done');
   const idleBest = must('idle-best');
+  const idleSpot = must('idle-spot');
   const idleRound = must('idle-round');
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
@@ -193,6 +269,8 @@ export function createPainter() {
   const state = {
     token: '',
     activeEl: null,
+    faceEl: null,
+    faceKey: '',
     layout: '',
     rsvpKey: '',
     hot: '\u0000',
@@ -313,6 +391,8 @@ export function createPainter() {
       renderSlice(words, 0, words.length);
       state.token = token;
       state.activeEl = null;
+      state.faceEl = null;
+      state.faceKey = '';
       state.layout = '';
       state.scroll = null;
       state.forceSnap = true;
@@ -320,16 +400,47 @@ export function createPainter() {
     syncActive(snap);
   }
 
+  function syncFace(snap, words) {
+    const el = state.activeEl;
+    if (state.faceEl && state.faceEl !== el) {
+      const previous = words[Number(state.faceEl.dataset.i)];
+      if (previous) fillWord(state.faceEl, previous);
+      else state.faceEl.removeAttribute('aria-label');
+    }
+    if (!el || !snap.word || snap.status === 'finished') {
+      state.faceEl = null;
+      state.faceKey = '';
+      return;
+    }
+    const key = `${snap.index}:${snap.status}:${snap.spot?.phase ?? ''}:${snap.spot?.cueIndex ?? ''}`;
+    if (el === state.faceEl && key === state.faceKey) return;
+    paintWord(el, snap.word, snap.spot, snap.status);
+    state.faceEl = el;
+    state.faceKey = key;
+  }
+
   function syncRsvp(snap, words) {
-    const key = `${snap.epoch}:${snap.index}:${snap.status}:${snap.word?.original ?? ''}:${snap.isTarget}`;
+    const key = [
+      snap.epoch,
+      snap.index,
+      snap.status,
+      snap.word?.original ?? '',
+      snap.isTarget,
+      snap.spot?.phase ?? '',
+      snap.spot?.cueIndex ?? '',
+    ].join(':');
     if (key === state.rsvpKey) return;
     state.rsvpKey = key;
     const prev = snap.index > 0 ? words[snap.index - 1] : null;
     const next = snap.index + 1 < words.length ? words[snap.index + 1] : null;
     setText(rsvpPrev, prev?.original || '');
     setText(rsvpNext, next?.original || '');
-    if (!snap.word) setText(rsvpCurrent, snap.status === 'finished' ? 'Done' : '');
-    else fillWord(rsvpCurrent, snap.word);
+    if (!snap.word) {
+      setText(rsvpCurrent, snap.status === 'finished' ? 'Done' : '');
+      rsvpCurrent.removeAttribute('aria-label');
+    } else {
+      paintWord(rsvpCurrent, snap.word, snap.spot, snap.status);
+    }
     rsvp.classList.toggle('is-pass', Boolean(snap.word) && !snap.isTarget);
   }
 
@@ -360,6 +471,7 @@ export function createPainter() {
     rsvp.hidden = config.viewMode !== 'rsvp';
     timer.hidden = !config.showTimeBar;
     ensureWindow(snap, words);
+    syncFace(snap, words);
     stepScroll();
     syncRsvp(snap, words);
 
@@ -373,22 +485,13 @@ export function createPainter() {
       timer.setAttribute('aria-valuenow', remainingPct);
     }
 
-    const playing = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
-    let targetLabel = 'Up next';
-    let targetValue = '—';
-    if (!snap.word) {
-      targetValue = '—';
-    } else if (!snap.isTarget) {
-      targetLabel = playing ? 'No key' : 'Up next';
-    } else if (!config.showTargetHud && snap.status === 'playing') {
-      targetLabel = 'First letter';
-      targetValue = '•';
-    } else {
-      targetLabel = playing ? 'First letter' : 'Up next';
-      targetValue = snap.answer || '—';
-    }
-    setText(hudTargetLabel, targetLabel);
-    setText(hudTarget, targetValue);
+    const hud = targetHud(snap);
+    setText(hudTargetLabel, hud.label);
+    setText(hudTarget, hud.value);
+    const timerLabel = snap.spot?.phase === 'look'
+      ? 'Time left to read this word'
+      : 'Time left on this word';
+    if (timer.getAttribute('aria-label') !== timerLabel) timer.setAttribute('aria-label', timerLabel);
     setText(hudStreak, String(snap.streak));
     setText(hudScore, snap.score.toLocaleString());
     setText(hudPace, String(config.wpm));
@@ -426,7 +529,7 @@ export function createPainter() {
     }
 
     pauseBar.hidden = snap.status !== 'paused';
-    setText(pauseCopy, pauseRule(snap.responded));
+    setText(pauseCopy, pauseRule(snap.responded, snap.spot?.phase));
     setText(idleMiss, missRule(config.freezeSec));
     const showOverlay = snap.status === 'idle' || snap.status === 'break' || snap.status === 'finished';
     overlay.hidden = !showOverlay;
@@ -436,6 +539,8 @@ export function createPainter() {
     idleStart.disabled = snap.total === 0;
 
     setText(idleRound, roundNote(config.roundSize));
+    idleSpot.hidden = !config.spotCheck;
+    setText(idleSpot, config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break'
       ? Math.max(0, snap.index - snap.roundStart)
       : config.roundSize;
