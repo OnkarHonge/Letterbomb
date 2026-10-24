@@ -203,6 +203,17 @@ describe('recall', () => {
     ]);
   });
 
+  it('keeps a dash in the sentence and leaves a double space out', () => {
+    const words = parseText('Alpha  quietly — rests.');
+    const quietly = words.findIndex((word) => word.original === 'quietly');
+    expect(sentenceAround(words, quietly).map((part) => part.text)).toEqual([
+      'Alpha',
+      'quietly',
+      '—',
+      'rests.',
+    ]);
+  });
+
   it('keeps the sentence inside its own punctuation and paragraph', () => {
     const words = parseText('Alpha bravo.\n\nCharlie delta echo.');
     const delta = words.findIndex((word) => word.original.startsWith('delta'));

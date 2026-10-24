@@ -11,10 +11,13 @@ import {
   recallPrompt,
   roundNote,
   targetHud,
+  wordMarks,
 } from '../src/ui/paint.js';
 import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
+const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
 
 function tag(id) {
   const match = html.match(new RegExp(`<input id="${id}"[^>]*>`));
@@ -40,6 +43,19 @@ function range(id) {
 
 function checked(id) {
   return /\schecked(?:[\s>]|$)/.test(tag(id));
+}
+
+function rule(selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = css.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`));
+  expect(match, selector).toBeTruthy();
+  return match[1];
+}
+
+function decl(body, property) {
+  const match = body.match(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`));
+  expect(match, property).toBeTruthy();
+  return match[1].trim();
 }
 
 describe('page and engine', () => {
@@ -106,10 +122,10 @@ describe('page and engine', () => {
       value: DEFAULT_CONFIG.openingMultiplier,
     });
     expect(wordWindowNote(DEFAULT_CONFIG)).toBe(
-      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 880 ms.',
+      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 880 ms. A dash, an ellipsis, or a double space gives you 133 ms.',
     );
     expect(wordWindowNote({ ...DEFAULT_CONFIG, openingMultiplier: 3 })).toBe(
-      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 1480 ms.',
+      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 1480 ms. A dash, an ellipsis, or a double space gives you 133 ms.',
     );
     expect(range('cfg-round')).toMatchObject({
       min: LIMITS.roundSize[0],
@@ -205,5 +221,41 @@ describe('page and engine', () => {
       answer: 'D',
       spot: { phase: 'reveal', cueIndex: 3 },
     })).toEqual({ label: 'Letter', value: 'D' });
+  });
+
+  it('marks a gap beat the same way in the line and in the single-word view', () => {
+    expect(wordMarks({ isTarget: true, original: 'Go' })).toEqual({
+      className: 'word',
+      pass: false,
+      gap: false,
+      label: '',
+    });
+    expect(wordMarks({ isTarget: false, original: 'the' })).toMatchObject({
+      className: 'word is-pass',
+      pass: true,
+      gap: false,
+    });
+    expect(wordMarks({ isTarget: false, isGap: true, original: '—' })).toEqual({
+      className: 'word is-pass is-gap',
+      pass: true,
+      gap: true,
+      label: '',
+    });
+    expect(wordMarks({ isTarget: false, isGap: true, original: '  ' }).label).toBe('Pause');
+    expect(wordMarks(null)).toEqual({
+      className: 'word',
+      pass: false,
+      gap: false,
+      label: '',
+    });
+  });
+});
+
+describe('gap beat layout', () => {
+  it('keeps a double-space beat from collapsing in either view', () => {
+    const gap = rule('.word.is-gap,\n.rsvp.is-gap .rsvp-current,\n.rsvp-side.is-gap');
+    expect(decl(gap, 'white-space')).toBe('pre');
+    expect(decl(gap, 'min-width')).toBe('0.7em');
+    expect(decl(rule('.word.is-gap'), 'flex-shrink')).toBe('0');
   });
 });

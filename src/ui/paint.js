@@ -27,6 +27,22 @@ export function pauseRule(responded, phase) {
 export const RECALL_QUESTION = 'Which word fills the blank?';
 export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
 
+/** A wide space is named Pause. A dash stays visible and is still a gap. */
+export function wordMarks(word) {
+  const gap = Boolean(word?.isGap);
+  const pass = Boolean(word) && !word.isTarget;
+  const classes = ['word'];
+  if (pass) classes.push('is-pass');
+  if (gap) classes.push('is-gap');
+  const wide = gap && /^\s+$/.test(String(word?.original ?? ''));
+  return {
+    className: classes.join(' '),
+    pass,
+    gap,
+    label: wide ? 'Pause' : '',
+  };
+}
+
 export function targetHud(snap) {
   const playing = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
   if (!snap.word) return { label: 'Up next', value: '—' };
@@ -140,6 +156,8 @@ function fillWord(node, word) {
   if (!word) return;
   if (!word.displayChar) {
     node.textContent = word.original;
+    const { label } = wordMarks(word);
+    if (label) node.setAttribute('aria-label', label);
     return;
   }
   node.append(word.before);
@@ -304,7 +322,7 @@ export function createPainter() {
         fragment.append(gap);
       }
       const span = document.createElement('span');
-      span.className = word.isTarget ? 'word' : 'word is-pass';
+      span.className = wordMarks(word).className;
       span.dataset.i = String(i);
       fillWord(span, word);
       fragment.append(span);
@@ -433,15 +451,22 @@ export function createPainter() {
     state.rsvpKey = key;
     const prev = snap.index > 0 ? words[snap.index - 1] : null;
     const next = snap.index + 1 < words.length ? words[snap.index + 1] : null;
-    setText(rsvpPrev, prev?.original || '');
-    setText(rsvpNext, next?.original || '');
+    showSide(rsvpPrev, prev);
+    showSide(rsvpNext, next);
     if (!snap.word) {
       setText(rsvpCurrent, snap.status === 'finished' ? 'Done' : '');
       rsvpCurrent.removeAttribute('aria-label');
     } else {
       paintWord(rsvpCurrent, snap.word, snap.spot, snap.status);
     }
-    rsvp.classList.toggle('is-pass', Boolean(snap.word) && !snap.isTarget);
+    const marks = wordMarks(snap.word);
+    rsvp.classList.toggle('is-pass', marks.pass);
+    rsvp.classList.toggle('is-gap', marks.gap);
+  }
+
+  function showSide(node, word) {
+    setText(node, word?.original || '');
+    node.classList.toggle('is-gap', wordMarks(word).gap);
   }
 
   function paint(snap, words, extras) {

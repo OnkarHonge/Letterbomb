@@ -23,7 +23,7 @@ export function parseText(raw, filter = 'all') {
   const paragraphs = normalized.split(/\n\s*\n/);
 
   for (const paragraph of paragraphs) {
-    const tokens = paragraph.replace(/\n/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const tokens = tokensOf(paragraph);
     tokens.forEach((original, tokenIndex) => {
       words.push(annotate(original, words.length, mode, tokenIndex === 0 && words.length > 0));
     });
@@ -40,6 +40,28 @@ export function applyFilter(words, filter) {
   }));
 }
 
+/**
+ * Single spaces and line wraps separate words.
+ * Two or more spaces stay as one beat, shown as a double space.
+ */
+function tokensOf(paragraph) {
+  const line = paragraph.replace(/\n/g, ' ').trim();
+  if (!line) return [];
+
+  const tokens = [];
+  for (const part of line.split(/(\s{2,})/)) {
+    if (!part) continue;
+    if (/^\s{2,}$/.test(part)) {
+      tokens.push('  ');
+      continue;
+    }
+    for (const token of part.split(/\s+/)) {
+      if (token) tokens.push(token);
+    }
+  }
+  return tokens;
+}
+
 function annotate(original, id, filter, breakBefore) {
   const match = original.match(/\p{L}|\p{N}/u);
   const base = {
@@ -53,6 +75,7 @@ function annotate(original, id, filter, breakBefore) {
     isLong: false,
     isVowel: false,
     isCapital: false,
+    isGap: !match,
     isTarget: false,
     breakBefore,
   };

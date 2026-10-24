@@ -373,6 +373,14 @@ h3 {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 .word.is-pass { opacity: 0.72; }
+/* A double space is the beat. Pre keeps those spaces visible. */
+.word.is-gap,
+.rsvp.is-gap .rsvp-current,
+.rsvp-side.is-gap {
+  white-space: pre;
+  min-width: 0.7em;
+}
+.word.is-gap { flex-shrink: 0; }
 .first { font-weight: 700; }
 .word.active .first {
   color: var(--accent);

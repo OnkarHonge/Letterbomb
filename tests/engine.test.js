@@ -77,11 +77,31 @@ describe('parseText', () => {
     expect(words[1].hasPunctuation).toBe(true);
   });
 
-  it('drops tokens that have no pressable letter', () => {
+  it('treats a token with no letter as a gap', () => {
     const [marks, word] = parseText('... Hello');
     expect(marks.targetChar).toBeNull();
     expect(marks.isTarget).toBe(false);
+    expect(marks.isGap).toBe(true);
     expect(word.targetChar).toBe('H');
+    expect(word.isGap).toBe(false);
+  });
+
+  it('keeps a dash and a double space as short gaps', () => {
+    const words = parseText('Go —  on\nstill');
+    expect(words.map((word) => word.original)).toEqual(['Go', '—', '  ', 'on', 'still']);
+    expect(words.map((word) => word.isGap)).toEqual([false, true, true, false, false]);
+    expect(words[1].isTarget).toBe(false);
+    expect(words[1].hasPunctuation).toBe(false);
+    expect(parseText('Go on').map((word) => word.original)).toEqual(['Go', 'on']);
+    expect(parseText('A   B').map((word) => word.original)).toEqual(['A', '  ', 'B']);
+    expect(parseText('A\t\tB').map((word) => word.original)).toEqual(['A', '  ', 'B']);
+    expect(parseText('Go  \n\nNext').map((word) => word.original)).toEqual(['Go', 'Next']);
+    expect(parseText('Wait.')[0].isGap).toBe(false);
+    expect(parseText('—')[0].isGap).toBe(true);
+
+    const retagged = applyFilter(parseText('Go —  on'), 'capital');
+    expect(retagged.map((word) => word.isGap)).toEqual([false, true, true, false]);
+    expect(retagged.map((word) => word.isTarget)).toEqual([true, false, false, false]);
   });
 
   it('applies challenge filters', () => {
@@ -110,6 +130,19 @@ describe('timing', () => {
     expect(wordDeadlineMs({ isTarget: true, isOpening: true }, pace)).toBe(350);
     expect(wordDeadlineMs({ isTarget: true, hasPunctuation: true, isOpening: true }, pace)).toBe(650);
     expect(wordDeadlineMs({ isTarget: false, isOpening: true }, pace)).toBe(300);
+  });
+
+  it('gives a gap a third of the plain slot', () => {
+    const pace = { wpm: 600, forgivenessMs: 50, punctuationMultiplier: 2, openingMultiplier: 3 };
+    expect(wordDeadlineMs({ isGap: true }, pace)).toBe(33);
+    expect(wordDeadlineMs({
+      isGap: true,
+      hasPunctuation: true,
+      isOpening: true,
+      isTarget: true,
+    }, pace)).toBe(33);
+    expect(wordDeadlineMs({ isGap: true }, { wpm: 150, forgivenessMs: 280 })).toBe(133);
+    expect(wordDeadlineMs({ isTarget: true }, { wpm: 150, forgivenessMs: 280 })).toBe(680);
   });
 });
 

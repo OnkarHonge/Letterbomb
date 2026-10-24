@@ -6,10 +6,12 @@ export function wordWindowNote(config) {
   const plain = wordDeadlineMs({ hasPunctuation: false, isTarget: true }, config);
   const marked = wordDeadlineMs({ hasPunctuation: true, isTarget: true }, config);
   const opened = wordDeadlineMs({ hasPunctuation: false, isTarget: true, isOpening: true }, config);
+  const gap = wordDeadlineMs({ isGap: true }, config);
   return [
     `A normal word gives you ${plain} ms.`,
     `A word with punctuation gives you ${marked} ms.`,
     `The first word after a window gives you ${opened} ms.`,
+    `A dash, an ellipsis, or a double space gives you ${gap} ms.`,
   ].join(' ');
 }
 

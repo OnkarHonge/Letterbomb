@@ -93,6 +93,7 @@ export function sentenceAround(words, index, limit = words.length) {
   const parts = [];
   if (lead) parts.push({ text: '…', marked: false });
   for (let i = from; i <= to; i += 1) {
+    if (isWideSpace(words[i])) continue;
     parts.push({ text: words[i].original, marked: i === index });
   }
   if (to < end || clipped) parts.push({ text: '…', marked: false });
@@ -306,6 +307,10 @@ function letterCount(word) {
 
 function endsSentence(original) {
   return /[.!?…]["')\]]*$/u.test(String(original ?? ''));
+}
+
+function isWideSpace(word) {
+  return /^\s+$/.test(String(word?.original ?? ''));
 }
 
 function roll(random, length) {

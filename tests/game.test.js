@@ -395,10 +395,43 @@ describe('game', () => {
   });
 
   it('passes over punctuation-only tokens', () => {
-    const game = setup('... Next');
+    const game = setup('... Next', { punctuationMultiplier: 3 });
+    const glance = wordDeadlineMs({ isGap: true }, game.config);
     game.start(0);
-    game.tick(100);
-    expect(game.snapshot(100)).toMatchObject({ index: 1, misses: 0, answer: 'N' });
+    expect(game.snapshot(0).deadlineMs).toBe(glance);
+    game.tick(glance - 1);
+    expect(game.snapshot(glance - 1).index).toBe(0);
+    game.tick(glance);
+    expect(game.snapshot(glance)).toMatchObject({ index: 1, misses: 0, answer: 'N' });
+  });
+
+  it('glances at a dash or a double space, then reads the next word', () => {
+    const game = setup('Go —  on', { punctuationMultiplier: 3, openingMultiplier: 3 });
+    const glance = wordDeadlineMs({ isGap: true, hasPunctuation: true, isOpening: true }, game.config);
+    const keyed = wordDeadlineMs({ isTarget: true }, game.config);
+    expect(glance).toBeLessThan(keyed);
+
+    game.start(0);
+    game.press('g', 10);
+    expect(game.snapshot(10)).toMatchObject({
+      index: 1,
+      isTarget: false,
+      deadlineMs: glance,
+      misses: 0,
+    });
+    game.tick(10 + glance - 1);
+    expect(game.snapshot(10 + glance - 1).index).toBe(1);
+    game.tick(10 + glance);
+    expect(game.snapshot(10 + glance)).toMatchObject({
+      index: 2,
+      isTarget: false,
+      deadlineMs: glance,
+      misses: 0,
+    });
+    game.tick(10 + glance * 2 - 1);
+    expect(game.snapshot(10 + glance * 2 - 1).index).toBe(2);
+    game.tick(10 + glance * 2);
+    expect(game.snapshot(10 + glance * 2)).toMatchObject({ index: 3, answer: 'O', misses: 0 });
   });
 });
 
@@ -538,6 +571,17 @@ describe('opening pause', () => {
     expect(game.status).toBe(STATUS.FROZEN);
     game.tick(1010);
     expect(game.snapshot(1010)).toMatchObject({ index: 1, deadlineMs: 200, misses: 1 });
+  });
+
+  it('keeps the opening pause on the first key after a dash', () => {
+    const game = setup('— Alpha', { openingMultiplier: 2 });
+    const glance = wordDeadlineMs({ isGap: true }, game.config);
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({ index: 0, isTarget: false, deadlineMs: glance });
+    game.tick(glance - 1);
+    expect(game.snapshot(glance - 1).index).toBe(0);
+    game.tick(glance);
+    expect(game.snapshot(glance)).toMatchObject({ index: 1, answer: 'A', deadlineMs: 200, misses: 0 });
   });
 
   it('holds the longer window for the first word that needs a key', () => {
