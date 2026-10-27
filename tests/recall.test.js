@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS } from '../src/data/presets.js';
-import { parseText } from '../src/engine/parseText.js';
+import { parseText, wordKey } from '../src/engine/parseText.js';
 import {
   blankedSentence,
   buildRecall,
   recallBounds,
   selectTarget,
   sentenceAround,
-  wordKey,
 } from '../src/engine/recall.js';
 
 const PAIRED = 'Bravo quietly rests. Delta gently stays.';

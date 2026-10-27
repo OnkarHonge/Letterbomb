@@ -1,3 +1,5 @@
+import { wordKey } from './parseText.js';
+
 /**
  * One cloze about a sentence the reader has finished.
  * The blank is a content word inside the stretch just read. The sentence may
@@ -37,11 +39,6 @@ under unless until using
 whatever where whether which while whose within without would
 yourself yourselves
 `.split(/\s+/).filter(Boolean));
-
-export function wordKey(word) {
-  const chars = String(word?.original ?? '').match(/\p{L}|\p{N}/gu);
-  return chars ? chars.join('').toLocaleLowerCase() : '';
-}
 
 export function recallBounds(words, roundStart, end) {
   const total = words.length;

@@ -7,6 +7,7 @@ import {
   applyFilter,
   countWords,
   parseText,
+  wordKey,
 } from '../src/engine/parseText.js';
 import { pointsForHit } from '../src/engine/scoring.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
@@ -34,6 +35,8 @@ describe('parseText', () => {
     expect(word.targetChar).toBe('E');
     expect(word.isCapital).toBe(true);
     expect(word.isVowel).toBe(true);
+    expect(wordKey(word)).toBe('éclair');
+    expect(wordKey({ original: "don't" })).toBe('dont');
   });
 
   it('uses one punctuation set and one length for a long word', () => {

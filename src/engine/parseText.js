@@ -10,6 +10,12 @@ export function normalizeKey(raw) {
   return /[A-Z0-9]/.test(folded) ? folded : null;
 }
 
+/** Letters and digits of a word, folded for comparison. */
+export function wordKey(word) {
+  const chars = String(word?.original ?? '').match(/\p{L}|\p{N}/gu);
+  return chars ? chars.join('').toLocaleLowerCase() : '';
+}
+
 export function countWords(raw) {
   return parseText(raw).length;
 }
