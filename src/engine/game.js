@@ -2,6 +2,7 @@ import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, normalizeKey, parseText } from './parseText.js';
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
+import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
 import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
 import { wordDeadlineMs } from './timing.js';
 
@@ -52,6 +53,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let events = [];
   let spots = new Map();
   let spotPhase = null;
+  let phraseSpans = [];
+  let recital = null;
 
   function emit(event) {
     events.push(event);
@@ -89,7 +92,12 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function owedKey(word) {
+    if (recital && word?.targetChar) return word.targetChar;
     return cueFor(word)?.key ?? word?.targetChar ?? null;
+  }
+
+  function spanContaining(target) {
+    return phraseSpans.find((span) => target >= span.start && target < span.end) || null;
   }
 
   function phaseDeadline(word) {
@@ -116,7 +124,42 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     deadlineMs = deadlineFor(words[index]);
   }
 
+  function openLook(span, at) {
+    const phraseWords = words.slice(span.start, span.end);
+    opening = Boolean(pendingOpening);
+    if (opening) pendingOpening = false;
+    const lookMs = recitalLookMs(phraseWords, config, opening);
+    recital = { start: span.start, end: span.end, phase: 'look', lookMs };
+    index = span.start;
+    status = STATUS.PLAYING;
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    spotPhase = null;
+    wordStartedAt = at;
+    deadlineMs = lookMs;
+    emit({ type: 'word', index });
+  }
+
+  function enterRiff(at, cursor) {
+    index = cursor;
+    recital.phase = 'riff';
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    wordStartedAt = at;
+    deadlineMs = recitalFuseMs(config);
+    emit({ type: 'word', index });
+  }
+
   function beginWord(at) {
+    const span = spanContaining(index);
+    if (config.playMode === 'recital' && span?.kind === 'phrase' && span.start === index) {
+      openLook(span, at);
+      return;
+    }
+
+    recital = null;
     status = STATUS.PLAYING;
     responded = false;
     missReason = null;
@@ -148,6 +191,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     status = STATUS.FINISHED;
     responded = false;
     spotPhase = null;
+    recital = null;
     opening = false;
     missReason = null;
     missedKey = null;
@@ -157,9 +201,14 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function advance(at) {
-    const next = index + 1;
+    let next = index + 1;
+    if (recital?.phase === 'reveal') {
+      next = recital.end;
+      recital = null;
+    }
     if (next >= words.length) {
       index = words.length;
+      recital = null;
       finish();
       return;
     }
@@ -170,6 +219,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       status = STATUS.BREAK;
       responded = false;
       spotPhase = null;
+      recital = null;
       opening = false;
       missReason = null;
       missedKey = null;
@@ -181,8 +231,10 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     beginWord(at);
   }
 
-  function hit(at) {
-    const reaction = Math.max(0, Math.round(at - wordStartedAt));
+  function hit(at, reactionOverride) {
+    const reaction = reactionOverride !== undefined
+      ? reactionOverride
+      : Math.max(0, Math.round(at - wordStartedAt));
     streak += 1;
     if (streak > maxStreak) maxStreak = streak;
     hits += 1;
@@ -198,6 +250,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       deadlineMs = SPOT_REVEAL_MS;
       return;
     }
+    if (recital) return;
     if (config.advanceOnHit) advance(at);
   }
 
@@ -239,6 +292,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     opening = false;
     pendingOpening = false;
     spotPhase = null;
+    recital = null;
+    phraseSpans = [];
     spots = new Map();
     lastPressAt = Number.NEGATIVE_INFINITY;
     epoch += 1;
@@ -265,7 +320,15 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     }
     if (!config.spotCheck && spotPhase && spotPhase !== 'reveal') spotPhase = null;
     if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
-      deadlineMs = phaseDeadline(words[index]);
+      if (recital?.phase === 'look') {
+        const lookMs = recitalLookMs(words.slice(recital.start, recital.end), config, opening);
+        recital.lookMs = lookMs;
+        deadlineMs = lookMs;
+      } else if (recital?.phase === 'riff') {
+        deadlineMs = recitalFuseMs(config);
+      } else {
+        deadlineMs = phaseDeadline(words[index]);
+      }
     }
     return { ...config };
   }
@@ -283,6 +346,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     lastPressAt = Number.NEGATIVE_INFINITY;
     spots = new Map();
     spotPhase = null;
+    recital = null;
+    phraseSpans = pickPhrases(words);
     if (config.spotCheck) fillSpots();
     emit({ type: 'start' });
     pendingOpening = true;
@@ -306,6 +371,24 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     }
     if (responded) {
       advance(at);
+      return true;
+    }
+    if (recital?.phase === 'riff') {
+      status = STATUS.PLAYING;
+      wordStartedAt = at;
+      deadlineMs = recitalFuseMs(config);
+      return true;
+    }
+    if (recital?.phase === 'look') {
+      status = STATUS.PLAYING;
+      if (pendingOpening) {
+        opening = true;
+        pendingOpening = false;
+      }
+      const lookMs = recitalLookMs(words.slice(recital.start, recital.end), config, opening);
+      recital.lookMs = lookMs;
+      wordStartedAt = at;
+      deadlineMs = lookMs;
       return true;
     }
     const word = words[index];
@@ -346,14 +429,24 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (status !== STATUS.PAUSED) return false;
     const nextIndex = Number(target);
     if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= words.length) return false;
-    index = nextIndex;
-    roundStartIndex = nextIndex;
     responded = false;
     missReason = null;
     missedKey = null;
     opening = false;
     spotPhase = null;
-    deadlineMs = deadlineFor(words[index]);
+    recital = null;
+    const span = config.playMode === 'recital' ? spanContaining(nextIndex) : null;
+    if (span?.kind === 'phrase') {
+      index = span.start;
+      roundStartIndex = span.start;
+      const lookMs = recitalLookMs(words.slice(span.start, span.end), config, false);
+      recital = { start: span.start, end: span.end, phase: 'look', lookMs };
+      deadlineMs = lookMs;
+    } else {
+      index = nextIndex;
+      roundStartIndex = nextIndex;
+      deadlineMs = deadlineFor(words[index]);
+    }
     emit({ type: 'jump', index });
     return true;
   }
@@ -403,8 +496,45 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
   function press(raw, at = now()) {
     if (status !== STATUS.PLAYING) return false;
-    if (at - lastPressAt < INPUT_LOCK_MS) return false;
     const word = words[index];
+    if (recital?.phase === 'look') {
+      if (at - wordStartedAt >= deadlineMs) return false;
+      const key = normalizeKey(raw);
+      const expected = words[recital.start]?.targetChar;
+      if (!key || key !== expected) return false;
+      if (at - lastPressAt < INPUT_LOCK_MS) return false;
+      lastPressAt = at;
+      hit(at, 0);
+      if (recital.end - recital.start <= 1) {
+        recital = null;
+        advance(at);
+      } else {
+        enterRiff(at, recital.start + 1);
+      }
+      return true;
+    }
+    if (recital?.phase === 'riff') {
+      if (at - lastPressAt < INPUT_LOCK_MS) return false;
+      if (!word?.targetChar || responded) return false;
+      if (at - wordStartedAt >= deadlineMs) return false;
+      const key = normalizeKey(raw);
+      if (!key) return false;
+      lastPressAt = at;
+      if (key === word.targetChar) {
+        hit(at);
+        if (index + 1 >= recital.end) {
+          recital = null;
+          advance(at);
+        } else {
+          enterRiff(at, index + 1);
+        }
+      } else {
+        recital.phase = 'reveal';
+        miss('wrong', at, key);
+      }
+      return true;
+    }
+    if (at - lastPressAt < INPUT_LOCK_MS) return false;
     if (!word?.isTarget || responded) return false;
     if (spotPhase === 'look' || spotPhase === 'reveal') return false;
     if (at - wordStartedAt >= deadlineMs) return false;
@@ -435,6 +565,15 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
     if (at - wordStartedAt >= deadlineMs) {
       const word = words[index];
+      if (recital?.phase === 'look') {
+        enterRiff(at, recital.start);
+        return;
+      }
+      if (recital?.phase === 'riff') {
+        recital.phase = 'reveal';
+        miss('timeout', at, null);
+        return;
+      }
       if (spotPhase === 'look') {
         enterAnswer(at);
         return;
@@ -449,6 +588,10 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function snapshotAnswer(word) {
+    if (recital) {
+      if (recital.phase === 'riff') return null;
+      return word?.targetChar ?? null;
+    }
     if (!word?.isTarget) return null;
     if (isSpot(word) && spotPhase) {
       if (spotPhase === 'reveal' || status === STATUS.FROZEN) return spots.get(word.id).key;
@@ -462,6 +605,17 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     const cue = spots.get(word.id);
     if (!cue) return null;
     return { phase: spotPhase, cueIndex: cue.index };
+  }
+
+  function recitalView() {
+    if (!recital) return null;
+    return {
+      phase: recital.phase,
+      start: recital.start,
+      end: recital.end,
+      length: recital.end - recital.start,
+      place: index - recital.start + 1,
+    };
   }
 
   function snapshot(at = now()) {
@@ -500,7 +654,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
         : null,
       answer: snapshotAnswer(word),
       spot: spotView(word),
-      isTarget: Boolean(word?.isTarget),
+      recital: recitalView(),
+      isTarget: Boolean(recital ? word?.targetChar : word?.isTarget),
       responded,
       missReason,
       missedKey,

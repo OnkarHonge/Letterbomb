@@ -4,7 +4,9 @@ import {
   advanceScroll,
   beginScroll,
   nextLineUnder,
+  recitalTailSpace,
   scrollTopForReadingLine,
+  scrollTopForRecitalLine,
   scrollWasTaken,
 } from './scroll.js';
 
@@ -21,11 +23,18 @@ export function pauseRule(responded, phase) {
   if (phase === 'answer') {
     return 'The blocks stay. Resume gives them a new timer. Click a word to move the highlight.';
   }
+  if (phase === 'recital-look') {
+    return 'This phrase starts fresh when you resume. Click a word to move the highlight.';
+  }
+  if (phase === 'recital-riff') {
+    return 'The phrase stays hidden. Resume gives this letter a new fuse. Click a word to move the highlight.';
+  }
   return 'This word starts fresh when you resume. Click a word to move the highlight.';
 }
 
 export const RECALL_QUESTION = 'Which word fills the blank?';
 export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
+export const RECITAL_IDLE = 'Recital is on. A phrase stays up to read. The first letter hides it, and the rest come from memory on a short fuse.';
 
 /** A wide space is named Pause. A dash stays visible and is still a gap. */
 export function wordMarks(word) {
@@ -47,6 +56,14 @@ export function targetHud(snap) {
   const playing = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
   if (!snap.word) return { label: 'Up next', value: '—' };
   if (!snap.isTarget) return { label: playing ? 'No key' : 'Up next', value: '—' };
+  if (snap.recital && playing) {
+    if (snap.recital.phase === 'riff') return { label: 'Recall', value: '•' };
+    if (snap.recital.phase === 'look') {
+      if (!snap.config?.showTargetHud && snap.status === 'playing') return { label: 'Read', value: '•' };
+      return { label: 'Read', value: snap.answer || '•' };
+    }
+    return { label: 'Letter', value: snap.answer || '—' };
+  }
   if (snap.spot && playing) {
     if (snap.spot.phase === 'look') return { label: 'Read', value: '•' };
     if (snap.spot.phase === 'answer' && snap.status !== 'frozen') return { label: 'Marked block', value: '•' };
@@ -195,6 +212,46 @@ function fillPieces(node, original, cueIndex, mode) {
   if (cursor < text.length) node.append(text.slice(cursor));
 }
 
+function paintPlain(node, word) {
+  node.replaceChildren();
+  node.removeAttribute('aria-label');
+  node.removeAttribute('aria-hidden');
+  if (!word) return;
+  node.textContent = word.original;
+}
+
+function paintRecitalWord(node, word, recital, index, owedIndex) {
+  node.classList.remove('recital-look', 'recital-riff', 'recital-reveal');
+  node.classList.add(`recital-${recital.phase}`);
+  if (recital.phase === 'riff') {
+    node.replaceChildren();
+    const ghost = document.createElement('span');
+    ghost.className = 'recital-ghost';
+    ghost.textContent = word?.original ?? '';
+    ghost.setAttribute('aria-hidden', 'true');
+    node.append(ghost);
+    node.removeAttribute('aria-hidden');
+    if (index === recital.start) {
+      const count = document.createElement('span');
+      count.className = 'recital-count';
+      count.textContent = `${recital.place} of ${recital.length}`;
+      count.setAttribute('aria-hidden', 'true');
+      node.append(count);
+      node.setAttribute('aria-label', `Hidden phrase. Word ${recital.place} of ${recital.length}.`);
+    } else {
+      node.removeAttribute('aria-label');
+      node.setAttribute('aria-hidden', 'true');
+    }
+    return;
+  }
+  node.removeAttribute('aria-hidden');
+  if (recital.phase === 'reveal' && index === owedIndex) {
+    fillWord(node, word);
+    return;
+  }
+  paintPlain(node, word);
+}
+
 function paintWord(node, word, spot, status) {
   const face = spotFace(spot?.phase, status);
   if (!word) {
@@ -237,8 +294,12 @@ export function createPainter() {
   const panelIdle = must('panel-idle');
   const panelBreak = must('panel-break');
   const panelDone = must('panel-done');
+  const idleTitle = must('idle-title');
+  const idleRead = must('idle-read');
+  const idlePress = must('idle-press');
   const idleBest = must('idle-best');
   const idleSpot = must('idle-spot');
+  const idleRecital = must('idle-recital');
   const idleRound = must('idle-round');
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
@@ -287,7 +348,10 @@ export function createPainter() {
   const state = {
     token: '',
     activeEl: null,
+    activeEls: [],
     faceEl: null,
+    recitalEls: [],
+    recitalKey: '',
     faceKey: '',
     layout: '',
     rsvpKey: '',
@@ -301,6 +365,7 @@ export function createPainter() {
     scroll: null,
     reduceMotion: false,
     forceSnap: false,
+    pendingReveal: null,
   };
 
   function userTookScroll() {
@@ -363,43 +428,118 @@ export function createPainter() {
     writeScroll(step.scrollTop);
   }
 
-  function reveal(el) {
+  function clearRecitalTail() {
+    if (karaoke.style.paddingBottom) karaoke.style.paddingBottom = '';
+  }
+
+  function placeRecitalTail(lineHeight) {
+    const words = karaoke.querySelectorAll('.word');
+    let lastTop = 0;
+    let lastBottom = 0;
+    for (const word of words) {
+      const bottom = word.offsetTop + word.offsetHeight;
+      if (bottom >= lastBottom) {
+        lastBottom = bottom;
+        lastTop = word.offsetTop;
+      }
+    }
+    const needed = recitalTailSpace({
+      viewHeight: karaoke.clientHeight,
+      lineHeight,
+      lastTop,
+      lastBottom,
+    });
+    karaoke.style.paddingBottom = '';
+    const base = Number.parseFloat(getComputedStyle(karaoke).paddingBottom) || 0;
+    karaoke.style.paddingBottom = needed > base ? `${needed}px` : '';
+  }
+
+  function reveal(el, recital = false) {
     if (!el || karaoke.hidden) return;
     const { lineHeight, nextLineBottom } = previewBelow(el);
-    const next = scrollTopForReadingLine({
+    const metrics = {
       scrollTop: karaoke.scrollTop,
       viewHeight: karaoke.clientHeight,
       wordTop: el.offsetTop,
       wordHeight: el.offsetHeight,
       lineHeight,
-      nextLineBottom,
-    });
-    moveScroll(next);
-  }
-
-  function syncActive(snap) {
-    if (snap.status === 'finished' || snap.total === 0) {
-      state.activeEl?.classList.remove('active');
-      state.activeEl = null;
+    };
+    if (recital) {
+      placeRecitalTail(lineHeight);
+      moveScroll(scrollTopForRecitalLine(metrics));
       return;
     }
+    clearRecitalTail();
+    moveScroll(scrollTopForReadingLine({ ...metrics, nextLineBottom }));
+  }
 
-    const el = karaoke.querySelector(`[data-i="${snap.index}"]`);
-    const wordChanged = el !== state.activeEl;
-    if (wordChanged) {
-      state.activeEl?.classList.remove('active');
-      state.activeEl = el;
-      el?.classList.add('active');
+  function wordEl(index) {
+    return karaoke.querySelector(`[data-i="${index}"]`);
+  }
+
+  function restoreWord(el, words) {
+    if (!el) return;
+    el.classList.remove('recital-look', 'recital-riff', 'recital-reveal');
+    const word = words[Number(el.dataset.i)];
+    if (!word) {
+      el.removeAttribute('aria-label');
+      el.removeAttribute('aria-hidden');
+      return;
     }
-    if (!el || snap.config.viewMode !== 'karaoke') {
+    fillWord(el, word);
+  }
+
+  function syncActive(snap, words) {
+    const recital = snap.recital;
+    const finished = snap.status === 'finished' || snap.total === 0;
+    const start = !finished && recital ? recital.start : snap.index;
+    const end = !finished && recital ? recital.end : snap.index + 1;
+    const next = [];
+    if (!finished && snap.word) {
+      for (let index = start; index < end; index += 1) {
+        const el = wordEl(index);
+        if (el) next.push(el);
+      }
+    }
+
+    for (const el of state.activeEls) {
+      if (!next.includes(el)) {
+        el.classList.remove('active');
+        const word = words[Number(el.dataset.i)];
+        if (word && wordMarks(word).pass) el.classList.add('is-pass');
+      }
+    }
+    for (const el of next) {
+      el.classList.add('active');
+      el.classList.remove('is-pass');
+    }
+    state.activeEls = next;
+
+    const anchor = next[0] ?? null;
+    const wordChanged = anchor !== state.activeEl;
+    state.activeEl = anchor;
+    if (!anchor || snap.config.viewMode !== 'karaoke') {
       state.layout = '';
       state.scroll = null;
+      state.pendingReveal = null;
+      clearRecitalTail();
       return;
     }
 
     const layout = `${snap.config.fontScale}:${snap.config.focusMode}:${karaoke.clientHeight}`;
-    if (wordChanged || layout !== state.layout) reveal(el);
+    state.pendingReveal = wordChanged || layout !== state.layout
+      ? { el: anchor, recital: Boolean(recital), snap: state.forceSnap }
+      : null;
     state.layout = layout;
+    state.forceSnap = false;
+  }
+
+  function flushReveal() {
+    const pending = state.pendingReveal;
+    if (!pending) return;
+    state.pendingReveal = null;
+    state.forceSnap = pending.snap;
+    reveal(pending.el, pending.recital);
     state.forceSnap = false;
   }
 
@@ -409,16 +549,49 @@ export function createPainter() {
       renderSlice(words, 0, words.length);
       state.token = token;
       state.activeEl = null;
+      state.activeEls = [];
       state.faceEl = null;
+      state.recitalEls = [];
+      state.recitalKey = '';
       state.faceKey = '';
       state.layout = '';
       state.scroll = null;
       state.forceSnap = true;
     }
-    syncActive(snap);
+    syncActive(snap, words);
+  }
+
+  function clearRecitalFace(words) {
+    for (const el of state.recitalEls) restoreWord(el, words);
+    state.recitalEls = [];
+    state.recitalKey = '';
+  }
+
+  function syncRecitalFace(snap, words) {
+    const recital = snap.recital;
+    const key = recital
+      ? `${recital.phase}:${recital.place}:${recital.start}:${snap.index}:${snap.status}`
+      : '';
+    if (!recital || snap.status === 'finished') {
+      if (state.recitalEls.length) clearRecitalFace(words);
+      return false;
+    }
+    if (key === state.recitalKey) return true;
+    clearRecitalFace(words);
+    for (let index = recital.start; index < recital.end; index += 1) {
+      const el = wordEl(index);
+      if (!el) continue;
+      paintRecitalWord(el, words[index], recital, index, snap.index);
+      state.recitalEls.push(el);
+    }
+    state.recitalKey = key;
+    state.faceEl = null;
+    state.faceKey = '';
+    return true;
   }
 
   function syncFace(snap, words) {
+    if (syncRecitalFace(snap, words)) return;
     const el = state.activeEl;
     if (state.faceEl && state.faceEl !== el) {
       const previous = words[Number(state.faceEl.dataset.i)];
@@ -437,7 +610,30 @@ export function createPainter() {
     state.faceKey = key;
   }
 
+  function paintPhrase(node, words, snap) {
+    const recital = snap.recital;
+    node.replaceChildren();
+    if (recital.phase === 'riff') {
+      node.textContent = `${recital.place} of ${recital.length}`;
+      node.setAttribute('aria-label', `Hidden phrase. Word ${recital.place} of ${recital.length}.`);
+      return;
+    }
+    node.removeAttribute('aria-label');
+    words.forEach((word, offset) => {
+      if (offset > 0) node.append(' ');
+      const index = recital.start + offset;
+      if (recital.phase === 'reveal' && index === snap.index) {
+        const mark = document.createElement('span');
+        fillWord(mark, word);
+        node.append(mark);
+      } else {
+        node.append(word.original);
+      }
+    });
+  }
+
   function syncRsvp(snap, words) {
+    const recital = snap.recital;
     const key = [
       snap.epoch,
       snap.index,
@@ -446,9 +642,24 @@ export function createPainter() {
       snap.isTarget,
       snap.spot?.phase ?? '',
       snap.spot?.cueIndex ?? '',
+      recital?.phase ?? '',
+      recital?.place ?? '',
+      recital?.start ?? '',
+      recital?.end ?? '',
     ].join(':');
     if (key === state.rsvpKey) return;
     state.rsvpKey = key;
+    rsvp.classList.toggle('is-recital', Boolean(recital));
+    if (recital && snap.status !== 'finished') {
+      const prev = recital.start > 0 ? words[recital.start - 1] : null;
+      const next = recital.end < words.length ? words[recital.end] : null;
+      showSide(rsvpPrev, prev);
+      showSide(rsvpNext, next);
+      paintPhrase(rsvpCurrent, words.slice(recital.start, recital.end), snap);
+      rsvp.classList.toggle('is-pass', false);
+      rsvp.classList.toggle('is-gap', false);
+      return;
+    }
     const prev = snap.index > 0 ? words[snap.index - 1] : null;
     const next = snap.index + 1 < words.length ? words[snap.index + 1] : null;
     showSide(rsvpPrev, prev);
@@ -497,6 +708,7 @@ export function createPainter() {
     timer.hidden = !config.showTimeBar;
     ensureWindow(snap, words);
     syncFace(snap, words);
+    flushReveal();
     stepScroll();
     syncRsvp(snap, words);
 
@@ -513,9 +725,13 @@ export function createPainter() {
     const hud = targetHud(snap);
     setText(hudTargetLabel, hud.label);
     setText(hudTarget, hud.value);
-    const timerLabel = snap.spot?.phase === 'look'
-      ? 'Time left to read this word'
-      : 'Time left on this word';
+    const timerLabel = snap.recital?.phase === 'look'
+      ? 'Time left to read this phrase'
+      : snap.recital?.phase === 'riff'
+        ? 'Time left to recall this word'
+        : snap.spot?.phase === 'look'
+          ? 'Time left to read this word'
+          : 'Time left on this word';
     if (timer.getAttribute('aria-label') !== timerLabel) timer.setAttribute('aria-label', timerLabel);
     setText(hudStreak, String(snap.streak));
     setText(hudScore, snap.score.toLocaleString());
@@ -554,7 +770,12 @@ export function createPainter() {
     }
 
     pauseBar.hidden = snap.status !== 'paused';
-    setText(pauseCopy, pauseRule(snap.responded, snap.spot?.phase));
+    const pausePhase = snap.recital?.phase === 'look'
+      ? 'recital-look'
+      : snap.recital?.phase === 'riff'
+        ? 'recital-riff'
+        : snap.spot?.phase;
+    setText(pauseCopy, pauseRule(snap.responded, pausePhase));
     setText(idleMiss, missRule(config.freezeSec));
     const showOverlay = snap.status === 'idle' || snap.status === 'break' || snap.status === 'finished';
     overlay.hidden = !showOverlay;
@@ -564,8 +785,19 @@ export function createPainter() {
     idleStart.disabled = snap.total === 0;
 
     setText(idleRound, roundNote(config.roundSize));
-    idleSpot.hidden = !config.spotCheck;
-    setText(idleSpot, config.spotCheck ? SPOT_IDLE : '');
+    const recitalOn = config.playMode === 'recital';
+    setText(idleTitle, recitalOn ? 'Read the phrase' : 'Press the first letter');
+    setText(idleRead, recitalOn ? 'Read the highlighted phrase.' : 'Read the highlighted word.');
+    setText(
+      idlePress,
+      recitalOn
+        ? 'Press the first letter when you have it. The phrase hides, and the rest follow from memory.'
+        : 'Press its first letter before the bar runs out.',
+    );
+    idleRecital.hidden = !recitalOn;
+    setText(idleRecital, recitalOn ? RECITAL_IDLE : '');
+    idleSpot.hidden = recitalOn || !config.spotCheck;
+    setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break'
       ? Math.max(0, snap.index - snap.roundStart)
       : config.roundSize;

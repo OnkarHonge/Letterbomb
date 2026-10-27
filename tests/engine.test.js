@@ -176,5 +176,8 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({ spotLookMs: 5000 }).spotLookMs).toBe(800);
     expect(sanitizeConfig({ spotCheck: 'yes' }).spotCheck).toBe(false);
     expect(sanitizeConfig({}).spotCheck).toBe(false);
+    expect(sanitizeConfig({ playMode: 'recital' }).playMode).toBe('recital');
+    expect(sanitizeConfig({ playMode: 'nope' }).playMode).toBe('words');
+    expect(sanitizeConfig({}).playMode).toBe('words');
   });
 });

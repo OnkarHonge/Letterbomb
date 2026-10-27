@@ -99,16 +99,17 @@
         </div>
         <div id="overlay" class="overlay">
           <div id="panel-idle" class="panel">
-            <h2>Press the first letter</h2>
+            <h2 id="idle-title">Press the first letter</h2>
             <ol class="steps">
-              <li>Read the highlighted word.</li>
-              <li>Press its first letter before the bar runs out.</li>
+              <li id="idle-read">Read the highlighted word.</li>
+              <li id="idle-press">Press its first letter before the bar runs out.</li>
               <li id="idle-miss">Hits build a streak. A miss freezes the board, then you continue.</li>
               <li>Each breath fills a blank in a sentence you just read.</li>
             </ol>
             <button type="button" id="idle-start" class="btn btn-primary btn-large">Start</button>
             <p class="hint">Space also starts, pauses, and resumes.</p>
             <p id="idle-round" class="hint"></p>
+            <p id="idle-recital" class="hint" hidden></p>
             <p id="idle-spot" class="hint" hidden></p>
             <p id="idle-best" class="hint" hidden></p>
           </div>
@@ -222,6 +223,16 @@
       </label>
 
       <h3>What you press</h3>
+      <div class="choice">
+        <label>
+          <input type="radio" name="play" value="words" checked>
+          <span><strong>Words</strong><small>Each word asks for its first letter.</small></span>
+        </label>
+        <label>
+          <input type="radio" name="play" value="recital">
+          <span><strong>Recital</strong><small>A phrase stays up to read. The first letter hides it, and the rest come from memory.</small></span>
+        </label>
+      </div>
       <label class="field">
         <span>Which words need a key</span>
         <select id="cfg-filter">

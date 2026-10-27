@@ -1,5 +1,7 @@
 export const MIN_PREVIEW_LINES = 3;
 export const PREVIEW_INSET = 4;
+/** At this many rows or fewer, a recital phrase starts on the top row. */
+export const RECITAL_TOP_ROWS = 3;
 const SAME_ROW = 2;
 export const SCROLL_TAKEOVER = 2;
 
@@ -50,6 +52,54 @@ export function scrollTopForReadingLine({
   if (preview < fitted) preview = fitted;
   if (preview < current) return fitted;
   return preview;
+}
+
+// Recital keeps the phrase's first row near the top: the second row when more
+// than three fit, and the top row when the view is that short or shorter.
+export function scrollTopForRecitalLine({
+  scrollTop,
+  viewHeight,
+  wordTop,
+  wordHeight,
+  pad = 12,
+  lineHeight = 0,
+} = {}) {
+  const fitted = scrollTopToReveal(scrollTop, viewHeight, wordTop, wordHeight, pad);
+  const view = Math.max(0, Number.isFinite(viewHeight) ? viewHeight : 0);
+  const step = Math.max(0, Number.isFinite(lineHeight) ? lineHeight : 0);
+  if (view <= 0 || step <= 0) return fitted;
+
+  const top = Math.max(0, Number.isFinite(wordTop) ? wordTop : 0);
+  const rows = Math.floor(view / step);
+  if (rows <= RECITAL_TOP_ROWS) return Math.max(0, top - Math.max(0, pad));
+  return Math.max(0, top - step);
+}
+
+// Padding under the article so the last row can reach that same slot.
+// `lastTop` and `lastBottom` are that row's box, measured from the content top.
+export function recitalTailSpace({
+  viewHeight,
+  lineHeight,
+  lastTop = 0,
+  lastBottom = 0,
+  pad = 12,
+} = {}) {
+  const view = Math.max(0, Number.isFinite(viewHeight) ? viewHeight : 0);
+  const step = Math.max(0, Number.isFinite(lineHeight) ? lineHeight : 0);
+  if (view <= 0 || step <= 0) return 0;
+
+  const top = Math.max(0, Number.isFinite(lastTop) ? lastTop : 0);
+  const bottom = Math.max(top, Number.isFinite(lastBottom) ? lastBottom : top);
+  const target = scrollTopForRecitalLine({
+    scrollTop: 0,
+    viewHeight: view,
+    wordTop: top,
+    wordHeight: bottom - top,
+    pad,
+    lineHeight: step,
+  });
+  if (target <= 0) return 0;
+  return Math.max(0, Math.ceil(target + view - bottom));
 }
 
 // The line height is the smallest step between word rows, so a paragraph gap

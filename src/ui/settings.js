@@ -46,6 +46,7 @@ export function bindSettings(game, { onChange }) {
   const themeButtons = [...themeGrid.querySelectorAll('[data-theme]')];
   const paceButtons = [...must('pace-grid').querySelectorAll('[data-pace]')];
   const viewRadios = [...document.querySelectorAll('input[name="view"]')];
+  const playRadios = [...document.querySelectorAll('input[name="play"]')];
 
   function markChoice(buttons, key, active) {
     for (const button of buttons) {
@@ -67,6 +68,11 @@ export function bindSettings(game, { onChange }) {
     setText(windowNote, wordWindowNote(config));
   }
 
+  function playModeValue() {
+    const playMode = playRadios.find((radio) => radio.checked)?.value;
+    return playMode ? { playMode } : {};
+  }
+
   function readForm() {
     const theme = themeButtons.find((button) => button.getAttribute('aria-pressed') === 'true')?.dataset.theme;
     return {
@@ -80,6 +86,7 @@ export function bindSettings(game, { onChange }) {
       fontScale: Number(font.value) / 100,
       filter: filter.value,
       viewMode: viewRadios.find((radio) => radio.checked)?.value,
+      ...playModeValue(),
       advanceOnHit: advance.checked,
       showTargetHud: target.checked,
       showTimeBar: bar.checked,
@@ -119,6 +126,7 @@ export function bindSettings(game, { onChange }) {
     motion.checked = config.reducedMotion;
     spot.checked = config.spotCheck;
     for (const radio of viewRadios) radio.checked = radio.value === config.viewMode;
+    for (const radio of playRadios) radio.checked = radio.value === config.playMode;
     markChoice(themeButtons, 'theme', config.theme);
     markChoice(paceButtons, 'pace', matchingPace(config));
     paintLabels(config);
@@ -127,7 +135,7 @@ export function bindSettings(game, { onChange }) {
   for (const input of [wpm, forgive, freeze, punct, opening, round, look, font]) {
     input.addEventListener('input', applyForm);
   }
-  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, ...viewRadios]) {
+  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, ...viewRadios, ...playRadios]) {
     input.addEventListener('change', applyForm);
   }
 

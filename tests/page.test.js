@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONFIG, LIMITS, THEMES, VIEW_MODES } from '../src/engine/config.js';
+import { DEFAULT_CONFIG, LIMITS, PLAY_MODES, THEMES, VIEW_MODES } from '../src/engine/config.js';
 import { FILTERS, LONG_WORD_LETTERS, VOWELS } from '../src/engine/parseText.js';
 import {
   RECALL_QUESTION,
   missRule,
   pauseRule,
   recallHeading,
+  RECITAL_IDLE,
   recallPrompt,
   roundNote,
   targetHud,
@@ -156,6 +157,13 @@ describe('page and engine', () => {
     const checkedView = views.find((match) => /\schecked(?:[\s>]|$)/.test(match[2]));
     expect(checkedView[1]).toBe(DEFAULT_CONFIG.viewMode);
 
+    const plays = [...html.matchAll(/name="play" value="([^"]+)"([^>]*)>/g)];
+    expect(plays.map((match) => match[1])).toEqual([...PLAY_MODES]);
+    const checkedPlay = plays.find((match) => /\schecked(?:[\s>]|$)/.test(match[2]));
+    expect(checkedPlay[1]).toBe(DEFAULT_CONFIG.playMode);
+    expect(html).toContain('the rest come from memory');
+    expect(html).toContain('id="idle-recital"');
+
     const themes = [...html.matchAll(/data-theme="([^"]+)" aria-pressed="(true|false)"/g)];
     expect(themes.map((match) => match[1])).toEqual([...THEMES]);
     expect(themes.filter((match) => match[2] === 'true').map((match) => match[1])).toEqual([
@@ -168,6 +176,9 @@ describe('page and engine', () => {
     expect(missRule(0.8)).toContain('freezes the board');
     expect(pauseRule(false)).toContain('starts fresh');
     expect(pauseRule(false, 'answer')).toContain('The blocks stay');
+    expect(pauseRule(false, 'recital-look')).toContain('This phrase starts fresh');
+    expect(pauseRule(false, 'recital-riff')).toContain('The phrase stays hidden');
+    expect(RECITAL_IDLE).toContain('from memory');
     expect(pauseRule(true)).toBe(
       'That letter already counted. Resume moves on. Click a word to move the highlight.',
     );
@@ -221,6 +232,24 @@ describe('page and engine', () => {
       answer: 'D',
       spot: { phase: 'reveal', cueIndex: 3 },
     })).toEqual({ label: 'Letter', value: 'D' });
+    expect(targetHud({
+      ...base,
+      status: 'playing',
+      answer: 'A',
+      recital: { phase: 'look', place: 1, length: 4 },
+    })).toEqual({ label: 'Read', value: 'A' });
+    expect(targetHud({
+      ...base,
+      status: 'playing',
+      answer: null,
+      recital: { phase: 'riff', place: 2, length: 4 },
+    })).toEqual({ label: 'Recall', value: '•' });
+    expect(targetHud({
+      ...base,
+      status: 'frozen',
+      answer: 'B',
+      recital: { phase: 'reveal', place: 2, length: 4 },
+    })).toEqual({ label: 'Letter', value: 'B' });
   });
 
   it('marks a gap beat the same way in the line and in the single-word view', () => {

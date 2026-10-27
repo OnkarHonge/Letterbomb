@@ -31,6 +31,7 @@ export const DEFAULT_CONFIG = {
   roundSize: 40,
   spotCheck: false,
   spotLookMs: 350,
+  playMode: 'words',
 };
 
 export const PACE_PRESETS = {
@@ -105,6 +106,7 @@ export function matchingPace(config) {
 }
 
 export const VIEW_MODES = new Set(['karaoke', 'rsvp']);
+export const PLAY_MODES = new Set(['words', 'recital']);
 export const THEMES = new Set(['signal', 'paper', 'night', 'contrast']);
 
 export function sanitizeConfig(input) {
@@ -148,6 +150,7 @@ export function sanitizeConfig(input) {
   config.showKeypad = asBool(config.showKeypad, DEFAULT_CONFIG.showKeypad);
   config.focusMode = asBool(config.focusMode, DEFAULT_CONFIG.focusMode);
   config.spotCheck = asBool(config.spotCheck, DEFAULT_CONFIG.spotCheck);
+  config.playMode = PLAY_MODES.has(config.playMode) ? config.playMode : DEFAULT_CONFIG.playMode;
 
   return config;
 }
