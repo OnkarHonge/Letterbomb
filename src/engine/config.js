@@ -29,6 +29,7 @@ export const DEFAULT_CONFIG = {
   focusMode: false,
   fontScale: 1,
   roundSize: 40,
+  endQuestion: true,
   spotCheck: false,
   spotLookMs: 350,
   playMode: 'words',
@@ -129,6 +130,7 @@ export function sanitizeConfig(input) {
   );
   config.fontScale = clampNum(config.fontScale, LIMITS.fontScale, DEFAULT_CONFIG.fontScale, 2);
   config.roundSize = clampInt(config.roundSize, LIMITS.roundSize, DEFAULT_CONFIG.roundSize);
+  config.endQuestion = asBool(config.endQuestion, DEFAULT_CONFIG.endQuestion);
   config.spotLookMs = clampInt(config.spotLookMs, LIMITS.spotLookMs, DEFAULT_CONFIG.spotLookMs);
   config.viewMode = VIEW_MODES.has(config.viewMode) ? config.viewMode : DEFAULT_CONFIG.viewMode;
   config.filter = FILTERS.has(config.filter) ? config.filter : DEFAULT_CONFIG.filter;

@@ -28,6 +28,7 @@ export function bindSettings(game, { onChange }) {
   const openingVal = must('cfg-opening-val');
   const round = must('cfg-round');
   const roundVal = must('cfg-round-val');
+  const endQuestion = must('cfg-end-question');
   const look = must('cfg-look');
   const lookVal = must('cfg-look-val');
   const lookField = must('cfg-look-field');
@@ -84,6 +85,7 @@ export function bindSettings(game, { onChange }) {
       punctuationMultiplier: Number(punct.value),
       openingMultiplier: Number(opening.value),
       roundSize: Number(round.value),
+      endQuestion: endQuestion.checked,
       spotLookMs: Number(look.value),
       fontScale: Number(font.value) / 100,
       filter: filter.value,
@@ -131,6 +133,7 @@ export function bindSettings(game, { onChange }) {
     punct.value = String(config.punctuationMultiplier);
     opening.value = String(config.openingMultiplier);
     round.value = String(config.roundSize);
+    endQuestion.checked = config.endQuestion;
     look.value = String(config.spotLookMs);
     font.value = String(Math.round(config.fontScale * 100));
     filter.value = config.filter;
@@ -153,7 +156,7 @@ export function bindSettings(game, { onChange }) {
   for (const input of [wpm, forgive, freeze, punct, opening, round, look, font]) {
     input.addEventListener('input', applyForm);
   }
-  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, ...viewRadios, ...playRadios]) {
+  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, endQuestion, ...viewRadios, ...playRadios]) {
     input.addEventListener('change', applyForm);
   }
 

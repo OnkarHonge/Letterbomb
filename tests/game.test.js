@@ -200,7 +200,7 @@ describe('game', () => {
   });
 
   it('breaks a round and then finishes the article', () => {
-    const game = setup('Go Go Go Go Go', { roundSize: 2 });
+    const game = setup('Go Go. Go Go. Go', { roundSize: 2 });
     game.start(0);
     const press = (at) => expect(game.press('g', at)).toBe(true);
 
@@ -222,6 +222,89 @@ describe('game', () => {
     expect(game.snapshot().score).toBe(500);
     expect(game.snapshot().maxStreak).toBe(5);
     expect(game.start(400)).toBe(true);
+  });
+
+  it('waits for the next full stop after the round length', () => {
+    const game = setup('One two three four. Five', { roundSize: 2 });
+    game.start(0);
+    expect(game.press('o', 40)).toBe(true);
+    expect(game.press('t', 80)).toBe(true);
+    expect(game.status).toBe(STATUS.PLAYING);
+    expect(game.snapshot().index).toBe(2);
+    expect(game.press('t', 120)).toBe(true);
+    expect(game.status).toBe(STATUS.PLAYING);
+    expect(game.press('f', 160)).toBe(true);
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(game.snapshot()).toMatchObject({ index: 4, recall: null });
+  });
+
+  it('breaks on the full stop that completes the round length', () => {
+    const game = setup('One two. Three', { roundSize: 2 });
+    game.start(0);
+    expect(game.press('o', 40)).toBe(true);
+    expect(game.status).toBe(STATUS.PLAYING);
+    expect(game.press('t', 80)).toBe(true);
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(game.snapshot().index).toBe(2);
+  });
+
+  it('breaks on a question mark or an exclamation mark after the round length', () => {
+    const asked = setup('One two? Three', { roundSize: 2 });
+    asked.start(0);
+    expect(asked.press('o', 40)).toBe(true);
+    expect(asked.status).toBe(STATUS.PLAYING);
+    expect(asked.press('t', 80)).toBe(true);
+    expect(asked.status).toBe(STATUS.BREAK);
+    expect(asked.snapshot().index).toBe(2);
+
+    const shouted = setup('One two! Three', { roundSize: 2 });
+    shouted.start(0);
+    expect(shouted.press('o', 40)).toBe(true);
+    expect(shouted.status).toBe(STATUS.PLAYING);
+    expect(shouted.press('t', 80)).toBe(true);
+    expect(shouted.status).toBe(STATUS.BREAK);
+    expect(shouted.snapshot().index).toBe(2);
+  });
+
+  it('does not treat a comma as the breath', () => {
+    const game = setup('One two, three. Four', { roundSize: 2 });
+    game.start(0);
+    const at = pressLetters(game, ['o', 't']);
+    expect(game.status).toBe(STATUS.PLAYING);
+    expect(game.snapshot().index).toBe(2);
+    expect(game.press('t', at + 40)).toBe(true);
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(game.snapshot().index).toBe(3);
+  });
+
+  it('does not break on a full stop that arrives before the round length', () => {
+    const game = setup('One. Two three four. Five', { roundSize: 3 });
+    game.start(0);
+    const at = pressLetters(game, ['o', 't', 't']);
+    expect(game.status).toBe(STATUS.PLAYING);
+    expect(game.snapshot().index).toBe(3);
+    expect(game.press('f', at + 40)).toBe(true);
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(game.snapshot().index).toBe(4);
+  });
+
+  it('reads to the end when no full stop arrives after the round length', () => {
+    const game = setup('One two three', { roundSize: 1 });
+    game.start(0);
+    pressLetters(game, ['o', 't', 't']);
+    expect(game.status).toBe(STATUS.FINISHED);
+    expect(game.consumeEvents().some((event) => event.type === 'break')).toBe(false);
+  });
+
+  it('uses the round length the slider has at the moment of the full stop', () => {
+    const game = setup('One two three four. Five', { roundSize: 80 });
+    game.start(0);
+    pressLetters(game, ['o', 't', 't']);
+    expect(game.status).toBe(STATUS.PLAYING);
+    game.setConfig({ roundSize: 2 });
+    expect(game.press('f', 200)).toBe(true);
+    expect(game.status).toBe(STATUS.BREAK);
+    expect(game.snapshot().index).toBe(4);
   });
 
   it('plays a milestone on the tenth hit', () => {
@@ -356,6 +439,21 @@ describe('game', () => {
     expect(game.snapshot().recall).toMatchObject({ phase: 'ready', correct: true, points: RECALL_BONUS });
     expect(game.consumeEvents().some((event) => event.type === 'recall-hit' && event.points === RECALL_BONUS)).toBe(true);
     expect(game.start(at + 40)).toBe(true);
+  });
+
+  it('skips the question at the end when that choice is off', () => {
+    const finished = setup('Bravo quietly rests. Delta gently stays.', { endQuestion: false });
+    finished.start(0);
+    pressLetters(finished, ['b', 'q', 'r', 'd', 'g', 's']);
+    expect(finished.status).toBe(STATUS.FINISHED);
+    expect(finished.snapshot().recall).toBeNull();
+    expect(finished.start(400)).toBe(true);
+
+    const breathing = setup(CLOZE, { roundSize: 6, endQuestion: false });
+    breathing.start(0);
+    pressLetters(breathing, ['b', 'q', 'r', 'd', 'g', 's']);
+    expect(breathing.status).toBe(STATUS.BREAK);
+    expect(breathing.snapshot().recall.phase).toBe('ask');
   });
 
   it('drops an open recall when a new article is loaded', () => {
@@ -499,7 +597,7 @@ describe('playing a pace', () => {
 
 describe('opening pause', () => {
   it('gives the first word a longer window after Start, a breath, and Read again', () => {
-    const game = setup('Go Go Go Go', { openingMultiplier: 2, roundSize: 2 });
+    const game = setup('Go Go. Go Go', { openingMultiplier: 2, roundSize: 2 });
     game.start(0);
     expect(game.snapshot(0).deadlineMs).toBe(200);
 
@@ -599,7 +697,7 @@ describe('opening pause', () => {
   });
 
   it('holds that longer window after a breath when the next word needs no key', () => {
-    const game = setup('Go Go the Alpha', { filter: 'capital', openingMultiplier: 2, roundSize: 2 });
+    const game = setup('Go Go. the Alpha', { filter: 'capital', openingMultiplier: 2, roundSize: 2 });
     game.start(0);
     expect(game.snapshot(0)).toMatchObject({ answer: 'G', deadlineMs: 200 });
     game.press('g', 10);
@@ -854,7 +952,7 @@ describe('spot check', () => {
   });
 
   it('drops the spot check before the breath screen', () => {
-    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200, roundSize: 1 });
+    const game = setup('Word. Beta', { spotCheck: true, spotLookMs: 200, roundSize: 1 });
     game.start(0);
     game.tick(200);
     game.press('w', 220);
@@ -1176,8 +1274,8 @@ describe('recital', () => {
     expect(game.snapshot(0).deadlineMs).toBe(1600);
   });
 
-  it('waits for the phrase before a breath', () => {
-    const game = setup('Alpha Beta Golf Hotel India Juliet, Kilo Lima', {
+  it('waits for a full stop before a breath, even when the phrase has ended', () => {
+    const game = setup('Alpha Beta Golf Hotel India Juliet, Kilo Lima. Mike November', {
       playMode: 'recital',
       roundSize: 3,
     });
@@ -1185,11 +1283,13 @@ describe('recital', () => {
     game.press('a', 20);
     game.press('b', 60);
     game.press('g', 100);
-    expect(game.snapshot(100)).toMatchObject({ status: STATUS.PLAYING, index: 3, recital: { phase: 'riff' } });
     game.press('h', 140);
     game.press('i', 180);
     game.press('j', 220);
-    expect(game.snapshot(220)).toMatchObject({ status: STATUS.BREAK, index: 6, recital: null, hits: 6 });
+    expect(game.snapshot(220)).toMatchObject({ status: STATUS.PLAYING, index: 6, recital: { phase: 'look' } });
+    game.press('k', 260);
+    game.press('l', 300);
+    expect(game.snapshot(300)).toMatchObject({ status: STATUS.BREAK, index: 8, recital: null, hits: 8 });
   });
 
   it('finishes the phrase already up, then follows the new mode', () => {

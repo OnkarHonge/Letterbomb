@@ -75,10 +75,13 @@ export function targetHud(snap) {
   return { label: playing ? 'First letter' : 'Up next', value: snap.answer || '—' };
 }
 
-export function roundNote(roundSize) {
-  return roundSize > 0
-    ? `A breath screen shows up every ${roundSize} words and asks you to fill a blank from that stretch.`
-    : 'Rounds are off, so the article runs straight through. One fill-in question waits at the end.';
+export function roundNote(roundSize, endQuestion = true) {
+  if (roundSize > 0) {
+    return `A breath waits for a period, question mark, or exclamation mark after ${roundSize} words, then asks you to fill a blank from that stretch.`;
+  }
+  return endQuestion
+    ? 'Rounds are off, so the article runs straight through. One fill-in question waits at the end.'
+    : 'Rounds are off, so the article runs straight through.';
 }
 
 export function recallHeading(phase) {
@@ -784,7 +787,7 @@ export function createPainter() {
     panelDone.hidden = snap.status !== 'finished';
     idleStart.disabled = snap.total === 0;
 
-    setText(idleRound, roundNote(config.roundSize));
+    setText(idleRound, roundNote(config.roundSize, config.endQuestion));
     const recitalOn = config.playMode === 'recital';
     setText(idleTitle, recitalOn ? 'Read the phrase' : 'Press the first letter');
     setText(idleRead, recitalOn ? 'Read the highlighted phrase.' : 'Read the highlighted word.');

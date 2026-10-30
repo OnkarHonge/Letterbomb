@@ -6,6 +6,7 @@ import {
   VOWELS,
   applyFilter,
   countWords,
+  isTerminator,
   parseText,
   wordKey,
 } from '../src/engine/parseText.js';
@@ -52,6 +53,18 @@ describe('parseText', () => {
       expect(parseText(letter.toLowerCase())[0].isVowel).toBe(true);
     }
     expect(parseText('y')[0].isVowel).toBe(false);
+  });
+
+  it('treats a period, question mark, or exclamation mark as a terminator', () => {
+    expect(isTerminator('rests.')).toBe(true);
+    expect(isTerminator('rests."')).toBe(true);
+    expect(isTerminator('rests.)')).toBe(true);
+    expect(isTerminator('rests?')).toBe(true);
+    expect(isTerminator('rests!"')).toBe(true);
+    expect(isTerminator('rests!')).toBe(true);
+    expect(isTerminator('rests,')).toBe(false);
+    expect(isTerminator('rests…')).toBe(false);
+    expect(isTerminator('3.14')).toBe(false);
   });
 
   it('marks punctuation and word shape', () => {
@@ -179,5 +192,8 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({ playMode: 'recital' }).playMode).toBe('recital');
     expect(sanitizeConfig({ playMode: 'nope' }).playMode).toBe('words');
     expect(sanitizeConfig({}).playMode).toBe('words');
+    expect(sanitizeConfig({}).endQuestion).toBe(true);
+    expect(sanitizeConfig({ endQuestion: false }).endQuestion).toBe(false);
+    expect(sanitizeConfig({ endQuestion: 'no' }).endQuestion).toBe(true);
   });
 });

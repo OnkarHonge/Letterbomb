@@ -1,5 +1,5 @@
 import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
-import { applyFilter, normalizeKey, parseText } from './parseText.js';
+import { applyFilter, isTerminator, normalizeKey, parseText } from './parseText.js';
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
 import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
@@ -200,7 +200,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     missReason = null;
     missedKey = null;
     held = false;
-    openRecall();
+    if (config.endQuestion) openRecall();
+    else recall = null;
     emit({ type: 'finish', score, maxStreak, recall: Boolean(recall) });
   }
 
@@ -219,7 +220,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
     const doneInRound = next - roundStartIndex;
     index = next;
-    if (config.roundSize > 0 && doneInRound >= config.roundSize) {
+    const roundReady = config.roundSize > 0 && doneInRound >= config.roundSize;
+    if (roundReady && isTerminator(words[next - 1]?.original)) {
       status = STATUS.BREAK;
       responded = false;
       spotPhase = null;

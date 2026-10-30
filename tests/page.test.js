@@ -74,7 +74,7 @@ describe('page and engine', () => {
     expect(html).toContain('Each breath fills a blank in a sentence you just read.');
     expect(html.split(RECALL_QUESTION).length - 1).toBe(2);
     expect(html).toContain(
-      '0 reads the whole article with no breath screen. A fill-in question still waits at the end.',
+      '0 reads the whole article with no breath screen. Any other setting waits for a period, question mark, or exclamation mark after that many words.',
     );
     expect(html).toContain('Extra time on words with punctuation.');
     expect(html).toContain('Extra time on the first word after a window closes.');
@@ -88,6 +88,7 @@ describe('page and engine', () => {
     expect(checked('cfg-focus')).toBe(DEFAULT_CONFIG.focusMode);
     expect(checked('cfg-motion')).toBe(DEFAULT_CONFIG.reducedMotion);
     expect(checked('cfg-spot')).toBe(DEFAULT_CONFIG.spotCheck);
+    expect(checked('cfg-end-question')).toBe(DEFAULT_CONFIG.endQuestion);
     expect(html).toContain(`>${DEFAULT_CONFIG.spotLookMs} ms<`);
     expect(html).toContain('id="idle-spot"');
     expect(html).toContain('then turns into blocks');
@@ -192,16 +193,20 @@ describe('page and engine', () => {
     );
     expect(html).toContain('id="cfg-look-field" hidden');
     expect(html).toContain('Spot check stays off until you switch back to Words.');
+    expect(html).toContain('Question at the end');
     expect(html).toContain('Puts every control on this screen back to the start. The article stays.');
     expect(html).toContain('>Reset all<');
   });
 
   it('describes a breath the way the board asks it', () => {
     expect(roundNote(40)).toBe(
-      'A breath screen shows up every 40 words and asks you to fill a blank from that stretch.',
+      'A breath waits for a period, question mark, or exclamation mark after 40 words, then asks you to fill a blank from that stretch.',
     );
     expect(roundNote(0)).toBe(
       'Rounds are off, so the article runs straight through. One fill-in question waits at the end.',
+    );
+    expect(roundNote(0, false)).toBe(
+      'Rounds are off, so the article runs straight through.',
     );
     expect(recallHeading('ask')).toBe('Which word was here?');
     expect(recallHeading('reveal')).toBe('That word was here.');

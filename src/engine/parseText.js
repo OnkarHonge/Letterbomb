@@ -20,6 +20,11 @@ export function countWords(raw) {
   return parseText(raw).length;
 }
 
+/** A period, question mark, or exclamation mark ends the token. A comma or ellipsis does not. */
+export function isTerminator(original) {
+  return /[.!?]["')\]]*$/u.test(String(original ?? ''));
+}
+
 export function parseText(raw, filter = 'all') {
   const mode = FILTERS.has(filter) ? filter : 'all';
   const normalized = String(raw ?? '').replace(/\r\n/g, '\n').trim();

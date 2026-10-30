@@ -261,7 +261,11 @@
       <label class="field">
         <span class="field-top"><span>Round length</span><b id="cfg-round-val">40 words</b></span>
         <input id="cfg-round" type="range" min="0" max="200" step="5" value="40">
-        <span class="field-help">0 reads the whole article with no breath screen. A fill-in question still waits at the end.</span>
+        <span class="field-help">0 reads the whole article with no breath screen. Any other setting waits for a period, question mark, or exclamation mark after that many words.</span>
+      </label>
+      <label class="check">
+        <span><strong>Question at the end</strong><p>Asks you to fill a blank when the article is finished. A breath in the middle still asks.</p></span>
+        <input id="cfg-end-question" type="checkbox" checked>
       </label>
 
       <h3>The board</h3>
