@@ -40,53 +40,44 @@ export const PACE_PRESETS = {
     wpm: 10,
     forgivenessMs: 800,
     freezeSec: 0.5,
-    showTargetHud: true,
-    advanceOnHit: true,
   },
   study: {
     label: 'Study',
     wpm: 20,
     forgivenessMs: 800,
     freezeSec: 0.5,
-    showTargetHud: true,
-    advanceOnHit: true,
   },
   read: {
     label: 'Read',
     wpm: 40,
     forgivenessMs: 800,
     freezeSec: 0.5,
-    showTargetHud: true,
-    advanceOnHit: true,
   },
   warmup: {
     label: 'Warmup',
     wpm: 70,
     forgivenessMs: 600,
     freezeSec: 0.5,
-    showTargetHud: true,
   },
   flow: {
     label: 'Flow',
     wpm: 110,
     forgivenessMs: 420,
     freezeSec: 0.5,
-    showTargetHud: true,
   },
   reflex: {
     label: 'Reflex',
     wpm: 170,
     forgivenessMs: 240,
     freezeSec: 0.8,
-    showTargetHud: true,
   },
 };
 
-const PACE_KEYS = ['wpm', 'forgivenessMs', 'freezeSec', 'showTargetHud', 'advanceOnHit'];
+const PACE_KEYS = ['wpm', 'forgivenessMs', 'freezeSec'];
 
 /**
- * Values a Tune pace button writes.
- * A preset that omits a field, such as advanceOnHit on Warmup, leaves that setting alone.
+ * Values a Tune pace button writes: speed, forgiveness, and the miss freeze.
+ * The answer, advance-on-hit, and the pauses stay as the player set them.
  */
 export function pacePatch(preset) {
   const patch = {};

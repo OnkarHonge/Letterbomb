@@ -83,8 +83,12 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     return spotLookMs(withOpening(word), config);
   }
 
+  function spotLive() {
+    return config.spotCheck && config.playMode !== 'recital';
+  }
+
   function isSpot(word) {
-    return Boolean(config.spotCheck && word?.isTarget && word.isLong && spots.has(word.id));
+    return Boolean(spotLive() && word?.isTarget && word.isLong && spots.has(word.id));
   }
 
   function cueFor(word) {
@@ -108,7 +112,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
   function fillSpots() {
     spots = new Map();
-    if (!config.spotCheck) return;
+    if (!spotLive()) return;
     for (const id of pickSpotIds(words, random)) {
       const word = words[id];
       if (!word || word.id !== id) continue;
@@ -303,22 +307,15 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
   function setConfig(partial) {
     const previousFilter = config.filter;
-    const wasSpot = config.spotCheck;
     config = sanitizeConfig({ ...config, ...partial });
     if (config.filter !== previousFilter) {
       words = applyFilter(words, config.filter);
       epoch += 1;
     }
-    if (
-      config.spotCheck
-      && !wasSpot
-      && spots.size === 0
-      && status !== STATUS.IDLE
-      && status !== STATUS.FINISHED
-    ) {
+    if (spotLive() && spots.size === 0 && status !== STATUS.IDLE && status !== STATUS.FINISHED) {
       fillSpots();
     }
-    if (!config.spotCheck && spotPhase && spotPhase !== 'reveal') spotPhase = null;
+    if (!spotLive() && spotPhase && spotPhase !== 'reveal') spotPhase = null;
     if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
       if (recital?.phase === 'look') {
         const lookMs = recitalLookMs(words.slice(recital.start, recital.end), config, opening);
@@ -348,7 +345,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     spotPhase = null;
     recital = null;
     phraseSpans = pickPhrases(words);
-    if (config.spotCheck) fillSpots();
+    if (spotLive()) fillSpots();
     emit({ type: 'start' });
     pendingOpening = true;
     beginWord(at);

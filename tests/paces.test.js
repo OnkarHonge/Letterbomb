@@ -50,31 +50,17 @@ describe('pace presets', () => {
       expect(PACE_PRESETS[id]).toMatchObject({
         forgivenessMs: LIMITS.forgivenessMs[1],
         freezeSec: 0.5,
-        showTargetHud: true,
-        advanceOnHit: true,
       });
     }
   });
 
-  it('shows the answer on every pace', () => {
+  it('writes only speed, forgiveness, and the miss freeze', () => {
     for (const preset of Object.values(PACE_PRESETS)) {
-      expect(preset.showTargetHud).toBe(true);
-    }
-  });
-
-  it('writes only the fields a pace owns', () => {
-    for (const preset of Object.values(PACE_PRESETS)) {
-      const patch = pacePatch(preset);
-      const keys = ['wpm', 'forgivenessMs', 'freezeSec', 'showTargetHud'];
-      if (preset.advanceOnHit !== undefined) keys.push('advanceOnHit');
-      expect(Object.keys(patch)).toEqual(keys);
-      expect(patch).toMatchObject({
+      expect(pacePatch(preset)).toEqual({
         wpm: preset.wpm,
         forgivenessMs: preset.forgivenessMs,
         freezeSec: preset.freezeSec,
-        showTargetHud: preset.showTargetHud,
       });
-      if (preset.advanceOnHit !== undefined) expect(patch.advanceOnHit).toBe(preset.advanceOnHit);
     }
   });
 
@@ -85,8 +71,12 @@ describe('pace presets', () => {
       expect(matchingPace(config)).toBe(id);
       expect(matchingPace({ ...config, forgivenessMs: config.forgivenessMs + 10 })).toBeNull();
     }
-    const linger = sanitizeConfig(pacePatch(PACE_PRESETS.linger));
-    expect(matchingPace({ ...linger, advanceOnHit: false })).toBeNull();
+    const linger = sanitizeConfig({
+      ...pacePatch(PACE_PRESETS.linger),
+      advanceOnHit: false,
+      showTargetHud: false,
+    });
+    expect(matchingPace(linger)).toBe('linger');
   });
 
   it('survives sanitizing, so a chosen pace is not clamped away', () => {

@@ -460,15 +460,16 @@ describe('playing a pace', () => {
     expect(game.snapshot(7300)).toMatchObject({ status: STATUS.PLAYING, index: 1, misses: 1 });
   });
 
-  it('moves on from a learning pace as soon as the letter is right', () => {
-    const game = setup('Concept is', { advanceOnHit: false, roundSize: 0 });
+  it('leaves advance-on-hit alone when the pace is Study', () => {
+    const game = setup('Concept is', { advanceOnHit: false, showTargetHud: false, roundSize: 0 });
     game.setConfig(pacePatch(PACE_PRESETS.study));
-    expect(game.config.advanceOnHit).toBe(true);
+    expect(game.config.advanceOnHit).toBe(false);
+    expect(game.config.showTargetHud).toBe(false);
 
     game.start(0);
     expect(game.snapshot(0).deadlineMs).toBe(3800);
     expect(game.press('c', 250)).toBe(true);
-    expect(game.snapshot(250)).toMatchObject({ status: STATUS.PLAYING, index: 1, hits: 1 });
+    expect(game.snapshot(250)).toMatchObject({ status: STATUS.PLAYING, index: 0, hits: 1 });
   });
 
   it('gives a sentence ending the longer Linger window', () => {
@@ -481,13 +482,13 @@ describe('playing a pace', () => {
   });
 
   it('leaves Advance on a hit alone when the pace is Warmup', () => {
-    const game = setup('Alpha Beta', { advanceOnHit: false, roundSize: 0 });
+    const game = setup('Alpha Beta', { advanceOnHit: false, showTargetHud: false, roundSize: 0 });
     game.setConfig(pacePatch(PACE_PRESETS.warmup));
     expect(game.config.advanceOnHit).toBe(false);
+    expect(game.config.showTargetHud).toBe(false);
     expect(game.config).toMatchObject({
       wpm: PACE_PRESETS.warmup.wpm,
       forgivenessMs: PACE_PRESETS.warmup.forgivenessMs,
-      showTargetHud: PACE_PRESETS.warmup.showTargetHud,
     });
 
     game.start(0);
@@ -807,6 +808,28 @@ describe('spot check', () => {
     expect(game.snapshot(0).deadlineMs).toBe(400);
     game.tick(400);
     expect(game.snapshot(400)).toMatchObject({ spot: { phase: 'answer' }, deadlineMs: 200 });
+  });
+
+  it('stays off during a recital and comes back for Words', () => {
+    const recital = setup('Word Beta', { spotCheck: true, playMode: 'recital', spotLookMs: 200 });
+    recital.start(0);
+    expect(recital.snapshot(0).spot).toBeNull();
+    expect(recital.snapshot(0).recital.phase).toBe('look');
+    expect(recital.config.spotCheck).toBe(true);
+
+    const words = setup('Word Beta', { spotCheck: true, playMode: 'recital', spotLookMs: 200 });
+    words.setConfig({ playMode: 'words' });
+    words.start(0);
+    expect(words.snapshot(0).spot.phase).toBe('look');
+
+    const open = setup('Word Beta', { spotCheck: true, spotLookMs: 200 });
+    open.start(0);
+    expect(open.snapshot(0).spot.phase).toBe('look');
+    open.pause();
+    open.setConfig({ playMode: 'recital' });
+    expect(open.config.spotCheck).toBe(true);
+    open.resume(50);
+    expect(open.snapshot(50)).toMatchObject({ spot: null, answer: 'W' });
   });
 
   it('can be turned on during a pause, and a pace leaves it alone', () => {

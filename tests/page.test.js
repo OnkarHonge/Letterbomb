@@ -184,6 +184,18 @@ describe('page and engine', () => {
     );
   });
 
+  it('groups tune into play, speed, breaths, and the board', () => {
+    const headings = [...html.matchAll(/<h3>([^<]+)<\/h3>/g)].map((match) => match[1]);
+    expect(headings).toEqual(['How you play', 'How fast', 'Breaths', 'The board']);
+    expect(html).toContain(
+      'A pace sets speed, forgiveness, and how long a miss freezes. The pauses, the answer, and advance-on-hit stay as you set them.',
+    );
+    expect(html).toContain('id="cfg-look-field" hidden');
+    expect(html).toContain('Spot check stays off until you switch back to Words.');
+    expect(html).toContain('Puts every control on this screen back to the start. The article stays.');
+    expect(html).toContain('>Reset all<');
+  });
+
   it('describes a breath the way the board asks it', () => {
     expect(roundNote(40)).toBe(
       'A breath screen shows up every 40 words and asks you to fill a blank from that stretch.',

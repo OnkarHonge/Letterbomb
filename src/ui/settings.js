@@ -30,7 +30,9 @@ export function bindSettings(game, { onChange }) {
   const roundVal = must('cfg-round-val');
   const look = must('cfg-look');
   const lookVal = must('cfg-look-val');
+  const lookField = must('cfg-look-field');
   const spot = must('cfg-spot');
+  const spotNote = must('cfg-spot-note');
   const font = must('cfg-font');
   const fontVal = must('cfg-font-val');
   const windowNote = must('cfg-window');
@@ -68,13 +70,13 @@ export function bindSettings(game, { onChange }) {
     setText(windowNote, wordWindowNote(config));
   }
 
-  function playModeValue() {
-    const playMode = playRadios.find((radio) => radio.checked)?.value;
-    return playMode ? { playMode } : {};
+  function selectedPlay() {
+    return playRadios.find((radio) => radio.checked)?.value || game.config.playMode;
   }
 
   function readForm() {
     const theme = themeButtons.find((button) => button.getAttribute('aria-pressed') === 'true')?.dataset.theme;
+    const playMode = selectedPlay();
     return {
       wpm: Number(wpm.value),
       forgivenessMs: Number(forgive.value),
@@ -86,7 +88,7 @@ export function bindSettings(game, { onChange }) {
       fontScale: Number(font.value) / 100,
       filter: filter.value,
       viewMode: viewRadios.find((radio) => radio.checked)?.value,
-      ...playModeValue(),
+      playMode,
       advanceOnHit: advance.checked,
       showTargetHud: target.checked,
       showTimeBar: bar.checked,
@@ -94,15 +96,30 @@ export function bindSettings(game, { onChange }) {
       showKeypad: keypad.checked,
       focusMode: focus.checked,
       reducedMotion: motion.checked,
-      spotCheck: spot.checked,
+      spotCheck: playMode === 'recital' ? game.config.spotCheck : spot.checked,
       ...(theme ? { theme } : {}),
     };
   }
 
+  function paintPlay() {
+    const config = game.config;
+    const recital = config.playMode === 'recital';
+    spot.disabled = recital;
+    spot.checked = recital ? false : config.spotCheck;
+    spotNote.hidden = !recital;
+    lookField.hidden = recital || !config.spotCheck;
+    if (recital) spot.setAttribute('aria-describedby', 'cfg-spot-note');
+    else spot.removeAttribute('aria-describedby');
+  }
+
   function applyForm() {
+    if (selectedPlay() === 'words' && game.config.playMode === 'recital') {
+      spot.checked = game.config.spotCheck;
+    }
     game.setConfig(readForm());
     paintLabels(game.config);
     markChoice(paceButtons, 'pace', matchingPace(game.config));
+    paintPlay();
     onChange();
   }
 
@@ -130,6 +147,7 @@ export function bindSettings(game, { onChange }) {
     markChoice(themeButtons, 'theme', config.theme);
     markChoice(paceButtons, 'pace', matchingPace(config));
     paintLabels(config);
+    paintPlay();
   }
 
   for (const input of [wpm, forgive, freeze, punct, opening, round, look, font]) {
