@@ -95,7 +95,7 @@ function drain(at = performance.now()) {
 
 function handleEvent(event) {
   if (event.type === 'hit') {
-    if (event.streak % 10 !== 0) sound.hit(event.streak);
+    if (!event.sentenceEnd) sound.hit(event.ascent);
     painter.pop(`+${event.points}`, 'hit');
     rememberScore(event.score);
     if (event.maxStreak > best.streak) {
@@ -131,7 +131,7 @@ function handleEvent(event) {
   }
 
   if (event.type === 'milestone') {
-    sound.milestone();
+    sound.milestone(event.ascent);
     return;
   }
 

@@ -307,7 +307,7 @@ describe('game', () => {
     expect(game.snapshot().index).toBe(4);
   });
 
-  it('plays a milestone on the tenth hit', () => {
+  it('keeps the streak climbing through ten hits when no sentence ends', () => {
     const game = setup('Go '.repeat(10).trim());
     game.start(0);
     let time = 0;
@@ -319,7 +319,77 @@ describe('game', () => {
     expect(snap.score).toBe(1100);
     expect(snap.maxStreak).toBe(10);
     expect(game.status).toBe(STATUS.FINISHED);
-    expect(game.consumeEvents().some((event) => event.type === 'milestone')).toBe(true);
+    const events = game.consumeEvents();
+    expect(events.some((event) => event.type === 'milestone')).toBe(false);
+    const hits = events.filter((event) => event.type === 'hit');
+    expect(hits).toHaveLength(10);
+    expect(hits[9]).toMatchObject({ ascent: 10, streak: 10, sentenceEnd: false });
+  });
+
+  it.each(['.', '!', '?'])('chords on a word ending in %s and starts the next ascent at one', (mark) => {
+    const game = setup(`One${mark} Two`);
+    game.start(0);
+    game.consumeEvents();
+    game.press('o', 40);
+    const ended = game.consumeEvents();
+    const endHit = ended.findIndex((event) => event.type === 'hit');
+    expect(ended[endHit]).toMatchObject({ ascent: 1, streak: 1, sentenceEnd: true });
+    expect(ended[endHit + 1]).toMatchObject({ type: 'milestone', ascent: 1 });
+    game.press('t', 80);
+    const next = game.consumeEvents();
+    expect(next.some((event) => event.type === 'milestone')).toBe(false);
+    expect(next.find((event) => event.type === 'hit')).toMatchObject({
+      ascent: 1,
+      streak: 2,
+      sentenceEnd: false,
+    });
+    expect(game.snapshot().streak).toBe(2);
+    expect(game.snapshot().score).toBe(200);
+  });
+
+  it('keeps the streak and drops only the ascent after a sentence', () => {
+    const game = setup('One. Two three');
+    game.start(0);
+    game.consumeEvents();
+    game.press('o', 40);
+    game.press('t', 80);
+    game.press('t', 120);
+    const hits = game.consumeEvents().filter((event) => event.type === 'hit');
+    expect(hits.map((event) => event.ascent)).toEqual([1, 1, 2]);
+    expect(hits.map((event) => event.streak)).toEqual([1, 2, 3]);
+    expect(hits.map((event) => event.sentenceEnd)).toEqual([true, false, false]);
+    expect(game.snapshot().score).toBe(300);
+  });
+
+  it('does not chord on a comma', () => {
+    const game = setup('Go, now');
+    game.start(0);
+    game.consumeEvents();
+    pressLetters(game, ['g', 'n']);
+    const events = game.consumeEvents();
+    expect(events.some((event) => event.type === 'milestone')).toBe(false);
+    expect(events.filter((event) => event.type === 'hit').map((event) => event.ascent)).toEqual([1, 2]);
+  });
+
+  it('drops the ascent on a miss without a milestone', () => {
+    const game = setup('One two. Three');
+    game.start(0);
+    game.consumeEvents();
+    game.press('o', 40);
+    expect(game.press('x', 80)).toBe(true);
+    const missed = game.consumeEvents();
+    expect(missed.some((event) => event.type === 'milestone')).toBe(false);
+    expect(missed.find((event) => event.type === 'miss')).toMatchObject({
+      reason: 'wrong',
+      answer: 'T',
+      pressed: 'X',
+    });
+    game.press('t', 120);
+    expect(game.consumeEvents().find((event) => event.type === 'hit')).toMatchObject({
+      ascent: 1,
+      streak: 1,
+      sentenceEnd: false,
+    });
   });
 
   it('does not restart a run that is already moving', () => {

@@ -11,6 +11,13 @@ export function createSound() {
     return ctx;
   }
 
+  const semitone = 2 ** (1 / 12);
+
+  function ascentPitch(step) {
+    const height = Math.min(16, Math.max(1, Math.floor(Number(step) || 1)));
+    return 496 * semitone ** (height - 1);
+  }
+
   function tone({ frequency, endFrequency, duration, type = 'sine', gain = 0.08, delay = 0 }) {
     const audio = context();
     if (!audio) return;
@@ -41,10 +48,15 @@ export function createSound() {
         // Audio is optional. A failure must not stop the game.
       }
     },
-    hit(streak) {
+    hit(step) {
       try {
-        const base = 480 + Math.min(streak, 16) * 16;
-        tone({ frequency: base, endFrequency: base * 1.4, duration: 0.07, gain: 0.06 });
+        const base = ascentPitch(step);
+        tone({
+          frequency: base,
+          endFrequency: base * semitone ** (1 / 3),
+          duration: 0.07,
+          gain: 0.06,
+        });
       } catch {
         // Ignore audio graph errors.
       }
@@ -76,11 +88,14 @@ export function createSound() {
         // Ignore audio graph errors.
       }
     },
-    milestone() {
+    milestone(step) {
       try {
-        [523.25, 659.25, 783.99].forEach((frequency, index) => {
+        const root = ascentPitch(step);
+        const chord = [523.25, 659.25, 783.99];
+        const scale = root / chord[0];
+        chord.forEach((frequency, index) => {
           tone({
-            frequency,
+            frequency: frequency * scale,
             duration: 0.1,
             type: 'triangle',
             gain: 0.05,

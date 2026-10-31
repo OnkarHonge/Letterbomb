@@ -45,6 +45,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let epoch = 0;
   let score = 0;
   let streak = 0;
+  let ascent = 0;
   let maxStreak = 0;
   let hits = 0;
   let misses = 0;
@@ -63,6 +64,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function resetStats() {
     score = 0;
     streak = 0;
+    ascent = 0;
     maxStreak = 0;
     hits = 0;
     misses = 0;
@@ -243,13 +245,18 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       : Math.max(0, Math.round(at - wordStartedAt));
     streak += 1;
     if (streak > maxStreak) maxStreak = streak;
+    ascent += 1;
     hits += 1;
     reactionTimes.push(reaction);
     const points = pointsForHit(streak);
     score += points;
     responded = true;
-    emit({ type: 'hit', points, reaction, streak, score, maxStreak });
-    if (streak % 10 === 0) emit({ type: 'milestone', streak });
+    const sentenceEnd = isTerminator(words[index]?.original);
+    emit({ type: 'hit', points, reaction, streak, score, maxStreak, ascent, sentenceEnd });
+    if (sentenceEnd) {
+      emit({ type: 'milestone', ascent });
+      ascent = 0;
+    }
     if (spotPhase === 'answer') {
       spotPhase = 'reveal';
       wordStartedAt = at;
@@ -263,6 +270,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function miss(reason, at, pressed) {
     misses += 1;
     streak = 0;
+    ascent = 0;
     responded = true;
     missReason = reason;
     missedKey = pressed;
