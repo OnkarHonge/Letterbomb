@@ -1,9 +1,11 @@
-# Builds the static site and publishes it to GitHub Pages.
+# Builds main and beta-one, then publishes one Pages site.
+# / serves main. /beta-1/ serves the beta-one branch.
+# Keep this file on both branches. A push to either branch rebuilds both URLs.
 name: Deploy static content to Pages
 
 on:
   push:
-    branches: ['main']
+    branches: ['main', 'beta-one']
   workflow_dispatch:
 
 permissions:
@@ -22,23 +24,39 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          path: main
+      - name: Checkout beta-one
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: beta-one
+          path: beta-one
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: lts/*
           cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: npm run build
+          cache-dependency-path: main/package-lock.json
+      - name: Build main
+        working-directory: main
+        run: npm ci && npm run build
+      - name: Build beta-one
+        working-directory: beta-one
+        run: npm ci && npm run build
+      - name: Assemble site
+        run: |
+          mkdir -p site/beta-1
+          cp -a main/dist/. site/
+          cp -a beta-one/dist/. site/beta-1/
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: './dist'
+          path: site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
