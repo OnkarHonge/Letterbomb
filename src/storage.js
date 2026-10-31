@@ -1,5 +1,16 @@
 const KEY = 'reflexread.v1';
-const TEXT_LIMIT = 400_000;
+export const TEXT_LIMIT = 400_000;
+
+function storedArticle(article) {
+  const stored = {
+    id: article.id || 'custom',
+    label: article.label || 'Custom',
+    text: article.text,
+  };
+  const savedAt = Number(article.savedAt);
+  if (Number.isFinite(savedAt) && savedAt > 0) stored.savedAt = savedAt;
+  return stored;
+}
 
 export function loadSave() {
   try {
@@ -26,13 +37,7 @@ export function writeSave(data) {
     version: 1,
     config: data.config,
     best: data.best,
-    article: article?.text
-      ? {
-          id: article.id || 'custom',
-          label: article.label || 'Custom',
-          text: article.text,
-        }
-      : null,
+    article: article?.text ? storedArticle(article) : null,
   };
 
   try {

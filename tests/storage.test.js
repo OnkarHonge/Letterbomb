@@ -32,6 +32,16 @@ describe('storage', () => {
       best: { score: 400, streak: 4 },
       article,
     });
+    expect(loadSave().article).not.toHaveProperty('savedAt');
+  });
+
+  it('keeps the time an article was stored', () => {
+    writeSave({
+      config: { wpm: 150 },
+      best: { score: 0, streak: 0 },
+      article: { id: 'custom', label: 'Notes', text: 'Hello.', savedAt: 50 },
+    });
+    expect(loadSave().article.savedAt).toBe(50);
   });
 
   it('keeps the previous article when the new one is too large to store', () => {

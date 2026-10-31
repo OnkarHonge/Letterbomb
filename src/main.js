@@ -1,13 +1,28 @@
 /**
  * Wires the ReflexRead engine to the page.
  * Rules and timing live in src/engine. This file owns input, sound,
- * saving, and which screen is up. src/ui/paint.js draws each snapshot.
+ * saving, sharing the loaded article, and which screen is up.
+ * src/ui/paint.js draws each snapshot.
  */
 import { createSound } from './audio/sound.js';
 import { PRESETS } from './data/presets.js';
 import { createGame } from './engine/game.js';
 import { countWords } from './engine/parseText.js';
-import { loadSave, writeSave } from './storage.js';
+import { TEXT_LIMIT, loadSave, writeSave } from './storage.js';
+import {
+  articleKey,
+  articleToOpen,
+  clearPhrase,
+  loadHistory,
+  loadPhrase,
+  loadShelfCache,
+  publishArticle,
+  pullShelf,
+  rememberHistory,
+  shelfArticles,
+  writePhrase,
+  writeShelfCache,
+} from './sync.js';
 import { must, setText } from './ui/dom.js';
 import { bindLibrary } from './ui/library.js';
 import { createPainter, recallPrompt } from './ui/paint.js';
@@ -29,8 +44,10 @@ let article = storedArticle
       id: storedArticle.id || 'custom',
       label: storedArticle.label || 'Custom',
       text: storedArticle.text,
+      savedAt: Number(storedArticle.savedAt) || 0,
     }
-  : { id: fallback.id, label: fallback.title, text: fallback.text };
+  : { id: fallback.id, label: fallback.title, text: fallback.text, savedAt: 0 };
+let articlePicked = false;
 
 let best = {
   score: Number(saved?.best?.score) || 0,
@@ -72,8 +89,19 @@ buildKeys('0123456789', must('keys-digits'));
 
 const painter = createPainter();
 const settings = bindSettings(game, { onChange: scheduleSave });
-const library = bindLibrary({ onLoad: loadArticle });
+const library = bindLibrary({ onLoad: loadArticle, onPhrase: applyPhrase });
 library.setText(article.text);
+library.markActive(article.id, articleKey(article.text));
+library.setPhrase(loadPhrase());
+if (storedArticle?.text && !isPreset(storedArticle.text)) {
+  rememberHistory({
+    id: storedArticle.id || 'custom',
+    label: storedArticle.label || 'Custom',
+    text: storedArticle.text,
+    savedAt: Number(storedArticle.savedAt) || 1,
+  });
+}
+library.setSynced(visibleHistory());
 
 function extras() {
   const notes = [];
@@ -236,17 +264,146 @@ function loadArticle(next) {
     library.note('That text has no readable words.');
     return;
   }
+  articlePicked = true;
+  const share = next.share !== false && text.length <= TEXT_LIMIT;
   article = {
     id: next.id || 'custom',
     label: next.label || 'Custom',
     text,
+    savedAt: share ? Date.now() : Number(next.savedAt) || Date.now(),
   };
+  if (!isPreset(article.text) && article.text.length <= TEXT_LIMIT) rememberHistory(article);
   game.load(article.text, article.label);
-  library.markActive(article.id);
+  library.setText(article.text);
+  library.markActive(article.id, articleKey(article.text));
+  library.setSynced(visibleHistory());
   library.note('');
   closeModals();
   scheduleSave();
+  if (share) void shareArticle();
   drain();
+}
+
+let shelfTask = Promise.resolve();
+
+function enqueueShelf(task) {
+  const run = shelfTask.then(task, task);
+  shelfTask = run.then(
+    () => {},
+    () => {},
+  );
+  return run;
+}
+
+function isPreset(text) {
+  return PRESETS.some((preset) => preset.text === text);
+}
+
+function visibleHistory() {
+  return shelfArticles([...loadHistory(), ...loadShelfCache()]);
+}
+
+function shelfNote(reason) {
+  if (reason === 'missing') {
+    return 'Saved in History on this device. Add a sync phrase to share it.';
+  }
+  if (reason === 'rejected') return 'Saved in History on this device. The sync phrase was rejected.';
+  if (reason === 'unconfigured') return 'Saved in History on this device. The shared history is not set up yet.';
+  return 'Saved in History on this device. Other devices could not be reached.';
+}
+
+function applyPhrase(raw) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) {
+    clearPhrase();
+    library.setSynced(visibleHistory());
+    library.note('Sync phrase removed. History on this device stays here.');
+    return;
+  }
+  if (!writePhrase(trimmed)) {
+    library.note('Use at least 8 characters for the sync phrase.');
+    return;
+  }
+  library.setPhrase(loadPhrase());
+  void syncFromShelf({ tell: true });
+}
+
+async function shareArticle() {
+  const current = article;
+  await enqueueShelf(async () => {
+    const result = await publishArticle(current);
+    if (current !== article) return;
+    if (!result.ok) {
+      library.note(shelfNote(result.reason));
+      return;
+    }
+    writeShelfCache(result.articles);
+    library.setSynced(visibleHistory());
+  });
+}
+
+async function syncFromShelf({ tell = false } = {}) {
+  try {
+    await enqueueShelf(async () => {
+      if (!loadPhrase()) {
+        if (tell) library.note('Add a sync phrase to share History.');
+        return;
+      }
+      const pulled = await pullShelf();
+      if (!pulled.ok) {
+        if (tell) library.note(shelfNote(pulled.reason));
+        return;
+      }
+      let articles = pulled.articles;
+      const local = article;
+      const remembered = Boolean(storedArticle?.text) && local.text === storedArticle.text;
+      const stamp = Number(local.savedAt) || (remembered ? 1 : 0);
+      if (local?.text && !isPreset(local.text) && stamp > 0) {
+        rememberHistory({ ...local, savedAt: stamp });
+      }
+      const pending = loadHistory().filter(
+        (item) => !articles.some((saved) => saved.text === item.text),
+      );
+      let publishFailed = false;
+      for (const item of pending) {
+        const published = await publishArticle({
+          id: item.id,
+          label: item.label,
+          text: item.text,
+          savedAt: item.updatedAt || 1,
+        });
+        if (!published.ok) {
+          publishFailed = true;
+          if (tell) library.note(shelfNote(published.reason));
+          break;
+        }
+        articles = published.articles;
+      }
+      writeShelfCache(articles);
+      library.setSynced(visibleHistory());
+      if (publishFailed) return;
+      const newest = articleToOpen({
+        local: article,
+        shelf: articles,
+        articlePicked,
+        idle: game.status === 'idle',
+        modalOpen: modalOpen(),
+      });
+      if (!newest) {
+        if (tell) library.note('Sync phrase saved on this device.');
+        return;
+      }
+      loadArticle({
+        id: newest.id,
+        label: newest.label,
+        text: newest.text,
+        savedAt: newest.updatedAt,
+        share: false,
+      });
+    });
+  } catch {
+    // The article already restored from this browser stays loaded.
+  }
 }
 
 function rememberScore(score) {
@@ -422,3 +579,4 @@ document.addEventListener('visibilitychange', () => {
 
 drain();
 requestAnimationFrame(frame);
+void syncFromShelf();

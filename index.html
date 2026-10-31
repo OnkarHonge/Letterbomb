@@ -323,11 +323,21 @@
       <div class="modal-head">
         <div>
           <h2 id="library-title">Articles</h2>
-          <p class="field-help">Pick a text or paste your own. Loading it stops the current run.</p>
+          <p class="field-help">Pick a text or paste your own. Loading it stops the current run. Each article you load joins History. The same sync phrase shares that history across your devices. History keeps the 24 most recent articles.</p>
         </div>
         <button type="button" class="btn js-close">Close</button>
       </div>
+      <label class="field">
+        <span class="field-top"><span>Sync phrase</span></span>
+        <input id="shelf-phrase" type="password" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Same phrase on every device">
+      </label>
+      <p class="field-help">At least 8 characters. History on this device is shared when the phrase matches.</p>
+      <div class="btn-row">
+        <button type="button" id="save-phrase" class="btn">Save phrase</button>
+      </div>
       <div id="preset-list" class="preset-grid"></div>
+      <h3 id="synced-title" class="shelf-title" hidden>History</h3>
+      <div id="synced-list" class="preset-grid" hidden></div>
       <label class="field">
         <span class="field-top"><span>Paste a long article</span><b id="article-count">0 words</b></span>
         <textarea id="article-input" rows="8" placeholder="Paste an article, a chapter, or a few paragraphs."></textarea>
