@@ -3,6 +3,7 @@ import { TEXT_LIMIT } from './storage.js';
 
 export { TEXT_LIMIT };
 export const SHELF_CAP = 24;
+export const TOMBSTONE_CAP = 100;
 export const PHRASE_MIN = 8;
 export const PHRASE_MAX = 200;
 
@@ -66,6 +67,28 @@ export function shelfArticles(records) {
   return [...byText.values()].sort(
     (a, b) => b.updatedAt - a.updatedAt || a.label.localeCompare(b.label),
   );
+}
+
+export function planTombstones(records) {
+  const byKey = new Map();
+  const list = Array.isArray(records) ? records : [];
+  for (const record of list) {
+    const key = typeof record?.key === 'string' ? record.key : '';
+    const deletedAt = Number(record?.deletedAt);
+    if (!key || !Number.isFinite(deletedAt) || deletedAt <= 0) continue;
+    const current = byKey.get(key);
+    if (!current || deletedAt >= current.deletedAt) byKey.set(key, { key, deletedAt });
+  }
+  return [...byKey.values()]
+    .sort((a, b) => b.deletedAt - a.deletedAt)
+    .slice(0, TOMBSTONE_CAP);
+}
+
+export function blockedByTombstone(text, updatedAt, tombstones) {
+  const key = articleKey(text);
+  const tomb = planTombstones(tombstones).find((item) => item.key === key);
+  if (!tomb) return false;
+  return (Number(updatedAt) || 0) <= tomb.deletedAt;
 }
 
 export function planShelf(records) {

@@ -10,12 +10,17 @@ import { createGame } from './engine/game.js';
 import { countWords } from './engine/parseText.js';
 import { TEXT_LIMIT, loadSave, writeSave } from './storage.js';
 import {
+  applyTombstones,
   articleKey,
   articleToOpen,
+  blockedByTombstone,
   clearPhrase,
+  deleteSharedArticle,
+  forgetLocally,
   loadHistory,
   loadPhrase,
   loadShelfCache,
+  loadTombstones,
   publishArticle,
   pullShelf,
   rememberHistory,
@@ -89,7 +94,7 @@ buildKeys('0123456789', must('keys-digits'));
 
 const painter = createPainter();
 const settings = bindSettings(game, { onChange: scheduleSave });
-const library = bindLibrary({ onLoad: loadArticle, onPhrase: applyPhrase });
+const library = bindLibrary({ onLoad: loadArticle, onPhrase: applyPhrase, onDelete: removeArticle });
 library.setText(article.text);
 library.markActive(article.id, articleKey(article.text));
 library.setPhrase(loadPhrase());
@@ -300,7 +305,10 @@ function isPreset(text) {
 }
 
 function visibleHistory() {
-  return shelfArticles([...loadHistory(), ...loadShelfCache()]);
+  const tombstones = loadTombstones();
+  return shelfArticles([...loadHistory(), ...loadShelfCache()]).filter(
+    (item) => !blockedByTombstone(item.text, item.updatedAt, tombstones),
+  );
 }
 
 function shelfNote(reason) {
@@ -310,6 +318,29 @@ function shelfNote(reason) {
   if (reason === 'rejected') return 'Saved in History on this device. The sync phrase was rejected.';
   if (reason === 'unconfigured') return 'Saved in History on this device. The shared history is not set up yet.';
   return 'Saved in History on this device. Other devices could not be reached.';
+}
+
+function removalNote(result) {
+  if (result.ok && !result.reason) return 'Removed from History.';
+  if (result.reason === 'missing') {
+    return 'Removed from History on this device. Add a sync phrase to remove it everywhere.';
+  }
+  if (result.reason === 'rejected') return 'Removed on this device. The sync phrase was rejected.';
+  if (result.reason === 'unconfigured') {
+    return 'Removed on this device. The shared history is not set up yet.';
+  }
+  return 'Removed on this device. Other devices could not be reached.';
+}
+
+async function removeArticle(item) {
+  const deletedAt = Date.now();
+  forgetLocally(item.text, deletedAt);
+  library.setSynced(visibleHistory());
+  await enqueueShelf(async () => {
+    const result = await deleteSharedArticle(item, { deletedAt });
+    library.setSynced(visibleHistory());
+    if (!result.skipped) library.note(removalNote(result));
+  });
 }
 
 function applyPhrase(raw) {
@@ -354,15 +385,33 @@ async function syncFromShelf({ tell = false } = {}) {
         if (tell) library.note(shelfNote(pulled.reason));
         return;
       }
+      applyTombstones(pulled.tombstones);
       let articles = pulled.articles;
+      const tombstones = loadTombstones();
+      for (const item of articles.filter((saved) => blockedByTombstone(saved.text, saved.updatedAt, tombstones))) {
+        const tomb = tombstones.find((entry) => entry.key === articleKey(item.text));
+        const removed = await deleteSharedArticle(item, { deletedAt: tomb?.deletedAt });
+        if (removed.skipped) continue;
+        if (!removed.ok) {
+          if (tell) library.note(removalNote(removed));
+          break;
+        }
+        articles = removed.articles;
+      }
       const local = article;
       const remembered = Boolean(storedArticle?.text) && local.text === storedArticle.text;
       const stamp = Number(local.savedAt) || (remembered ? 1 : 0);
-      if (local?.text && !isPreset(local.text) && stamp > 0) {
+      if (
+        local?.text
+        && !isPreset(local.text)
+        && stamp > 0
+        && !blockedByTombstone(local.text, stamp, loadTombstones())
+      ) {
         rememberHistory({ ...local, savedAt: stamp });
       }
       const pending = loadHistory().filter(
-        (item) => !articles.some((saved) => saved.text === item.text),
+        (item) => !articles.some((saved) => saved.text === item.text)
+          && !blockedByTombstone(item.text, item.updatedAt, loadTombstones()),
       );
       let publishFailed = false;
       for (const item of pending) {
@@ -372,6 +421,11 @@ async function syncFromShelf({ tell = false } = {}) {
           text: item.text,
           savedAt: item.updatedAt || 1,
         });
+        if (published.blocked) {
+          applyTombstones(published.tombstones);
+          articles = published.articles;
+          continue;
+        }
         if (!published.ok) {
           publishFailed = true;
           if (tell) library.note(shelfNote(published.reason));

@@ -4,7 +4,7 @@ import { normalizePhrase } from '../shelf.js';
 import { articleKey } from '../sync.js';
 import { must, setText } from './dom.js';
 
-export function bindLibrary({ onLoad, onPhrase }) {
+export function bindLibrary({ onLoad, onPhrase, onDelete }) {
   const list = must('preset-list');
   const syncedList = must('synced-list');
   const syncedTitle = must('synced-title');
@@ -83,7 +83,16 @@ export function bindLibrary({ onLoad, onPhrase }) {
         updateCount();
         onLoad({ id: item.id || 'custom', label: item.label || 'Custom article', text: item.text });
       });
-      syncedList.append(button);
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn history-remove';
+      remove.textContent = 'Remove';
+      remove.setAttribute('aria-label', `Remove “${clip}” from History`);
+      remove.addEventListener('click', () => onDelete?.(item));
+      row.append(button, remove);
+      syncedList.append(row);
     }
     markActive(activeId, activeKey);
   }

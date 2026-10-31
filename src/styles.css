@@ -697,6 +697,14 @@ textarea {
   font-weight: 800;
 }
 .preset { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.history-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.history-row .preset { flex: 1; min-width: 0; }
+.history-remove { flex: 0 0 auto; align-self: center; min-width: 44px; min-height: 44px; }
 .shelf-title { margin: 16px 0 8px; font-size: 0.95rem; }
 .preset-grid[hidden],
 .shelf-title[hidden] { display: none; }

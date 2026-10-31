@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { planShelf } from '../src/shelf.js';
+import { handleRequest } from '../worker/index.js';
 import {
   articleKey,
   articleToOpen,
+  deleteSharedArticle,
   loadHistory,
   loadPhrase,
   loadShelfCache,
+  loadTombstones,
   publishArticle,
   pullShelf,
   rememberHistory,
@@ -262,5 +265,113 @@ describe('article shelf', () => {
     );
     expect(result).toMatchObject({ ok: false, reason: 'size' });
     expect(called).toBe(false);
+  });
+
+  it('removes an article on this device even when the shelf cannot be reached', async () => {
+    writePhrase(PHRASE);
+    rememberHistory({ id: 'custom', label: 'Notes', text: 'Keep this.', savedAt: 4 });
+    rememberHistory({ id: 'custom', label: 'Notes', text: 'Drop this.', savedAt: 8 });
+    writeShelfCache([
+      { id: 'custom', label: 'Notes', text: 'Drop this.', updatedAt: 8 },
+      { id: 'custom', label: 'Notes', text: 'Keep this.', updatedAt: 4 },
+    ]);
+    let called = false;
+    const result = await deleteSharedArticle(
+      { text: 'Drop this.' },
+      {
+        phrase: PHRASE,
+        url: 'https://shelf.test/shelf',
+        fetchImpl: async () => {
+          called = true;
+          throw new Error('offline');
+        },
+      },
+    );
+    expect(called).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(loadHistory().map((item) => item.text)).toEqual(['Keep this.']);
+    expect(loadShelfCache().map((item) => item.text)).toEqual(['Keep this.']);
+    expect(rememberHistory({
+      id: 'custom',
+      label: 'Notes',
+      text: 'Drop this.',
+      savedAt: 8,
+    }).map((item) => item.text)).toEqual(['Keep this.']);
+    expect(JSON.stringify(loadTombstones())).not.toContain('Drop this.');
+  });
+
+  it('leaves a newer copy alone when an older removal is still in flight', async () => {
+    rememberHistory({ id: 'custom', label: 'Notes', text: 'Drop this.', savedAt: 30 });
+    let called = false;
+    const result = await deleteSharedArticle(
+      { text: 'Drop this.' },
+      {
+        deletedAt: 20,
+        phrase: PHRASE,
+        url: 'https://shelf.test/shelf',
+        fetchImpl: async () => {
+          called = true;
+          return jsonResponse(200, { articles: [], tombstones: [] });
+        },
+      },
+    );
+    expect(result.skipped).toBe(true);
+    expect(called).toBe(false);
+    expect(loadHistory().map((item) => item.text)).toEqual(['Drop this.']);
+  });
+
+  it('does not call the shelf when removing without a phrase', async () => {
+    rememberHistory({ id: 'custom', label: 'Notes', text: 'Drop this.', savedAt: 8 });
+    let called = false;
+    const result = await deleteSharedArticle(
+      { text: 'Drop this.' },
+      {
+        phrase: '',
+        url: 'https://shelf.test/shelf',
+        fetchImpl: async () => {
+          called = true;
+          return jsonResponse(200, { articles: [], tombstones: [] });
+        },
+      },
+    );
+    expect(result).toMatchObject({ ok: true, reason: 'missing' });
+    expect(called).toBe(false);
+    expect(loadHistory()).toEqual([]);
+  });
+
+  it('drops the article from the shared shelf and refuses the old copy', async () => {
+    writePhrase(PHRASE);
+    const map = new Map();
+    const env = {
+      SHELF: {
+        async get(key) {
+          return map.has(key) ? map.get(key) : null;
+        },
+        async put(key, value) {
+          map.set(key, String(value));
+        },
+      },
+    };
+    const fetchImpl = (url, options) => handleRequest(new Request(url, options), env);
+    const options = shelfOptions(fetchImpl);
+    const article = { id: 'custom', label: 'Notes' };
+    await publishArticle({ ...article, text: 'Keep this.', savedAt: 4 }, options);
+    await publishArticle({ ...article, text: 'Drop this.', savedAt: 8 }, options);
+
+    const removed = await deleteSharedArticle({ text: 'Drop this.' }, options);
+    expect(removed.ok).toBe(true);
+    expect(removed.articles.map((item) => item.text)).toEqual(['Keep this.']);
+    expect(JSON.stringify([...map.values()])).not.toContain('Drop this.');
+
+    const blocked = await publishArticle({ ...article, text: 'Drop this.', savedAt: 9 }, options);
+    expect(blocked.blocked).toBe(true);
+    expect(blocked.articles.map((item) => item.text)).toEqual(['Keep this.']);
+
+    const restored = await publishArticle(
+      { ...article, text: 'Drop this.', savedAt: Date.now() + 10_000 },
+      options,
+    );
+    expect(restored.blocked).toBeUndefined();
+    expect(restored.articles.map((item) => item.text)).toEqual(['Drop this.', 'Keep this.']);
   });
 });

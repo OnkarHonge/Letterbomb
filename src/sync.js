@@ -4,13 +4,15 @@ import { TEXT_LIMIT } from './storage.js';
 import {
   articleKey,
   articleToOpen,
+  blockedByTombstone,
   encodePhrase,
   normalizePhrase,
   planShelf,
+  planTombstones,
   shelfArticles,
 } from './shelf.js';
 
-export { articleKey, articleToOpen, planShelf, shelfArticles };
+export { articleKey, articleToOpen, blockedByTombstone, planShelf, shelfArticles };
 
 // Filled in after the worker is deployed. Dev uses the local wrangler port.
 const PUBLISHED_SHELF = 'https://letterbomb-shelf.onkarhonge.workers.dev/shelf';
@@ -24,6 +26,7 @@ export function shelfUrl() {
 const PHRASE_KEY = 'reflexread.phrase.v1';
 const CACHE_KEY = 'reflexread.shelf.v1';
 const HISTORY_KEY = 'reflexread.history.v1';
+const TOMBSTONE_KEY = 'reflexread.tombstones.v1';
 
 export function loadPhrase() {
   try {
@@ -79,6 +82,70 @@ function slimArticles(articles) {
   }));
 }
 
+export function loadTombstones() {
+  try {
+    const raw = localStorage.getItem(TOMBSTONE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return planTombstones(data?.tombstones);
+  } catch {
+    return [];
+  }
+}
+
+function writeTombstones(tombstones) {
+  const slim = planTombstones(tombstones);
+  try {
+    localStorage.setItem(TOMBSTONE_KEY, JSON.stringify({ version: 1, tombstones: slim }));
+  } catch {
+    // This session still hides the removed articles.
+  }
+  return slim;
+}
+
+function writeHistory(articles) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify({
+      version: 1,
+      articles: slimArticles(articles),
+    }));
+  } catch {
+    // The in-memory list is still returned for this session.
+  }
+}
+
+export function forgetLocally(text, deletedAt = Date.now()) {
+  const tombstones = writeTombstones([...loadTombstones(), { key: articleKey(text), deletedAt }]);
+  const history = loadHistory().filter(
+    (item) => !blockedByTombstone(item.text, item.updatedAt, tombstones),
+  );
+  writeHistory(history);
+  const phrase = loadPhrase();
+  if (phrase) {
+    const cached = loadShelfCache(phrase).filter(
+      (item) => !blockedByTombstone(item.text, item.updatedAt, tombstones),
+    );
+    writeShelfCache(cached, phrase);
+  }
+  return history;
+}
+
+export function applyTombstones(tombstones) {
+  const merged = writeTombstones([...loadTombstones(), ...planTombstones(tombstones)]);
+  const history = loadHistory().filter(
+    (item) => !blockedByTombstone(item.text, item.updatedAt, merged),
+  );
+  writeHistory(history);
+  const phrase = loadPhrase();
+  if (phrase) {
+    const cached = loadShelfCache(phrase).filter(
+      (item) => !blockedByTombstone(item.text, item.updatedAt, merged),
+    );
+    writeShelfCache(cached, phrase);
+  }
+  return merged;
+}
+
 export function loadHistory() {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
@@ -93,6 +160,7 @@ export function loadHistory() {
 export function rememberHistory(article) {
   const text = String(article?.text || '');
   const updatedAt = Number(article?.savedAt || article?.updatedAt) || Date.now();
+  if (blockedByTombstone(text, updatedAt, loadTombstones())) return loadHistory();
   const articles = planShelf([
     ...loadHistory(),
     {
@@ -159,9 +227,12 @@ async function send(fetchImpl, url, options) {
   return response;
 }
 
-function articlesFrom(data) {
+function documentFrom(data) {
   if (!data || !Array.isArray(data.articles)) return null;
-  return shelfArticles(data.articles);
+  return {
+    articles: shelfArticles(data.articles),
+    tombstones: planTombstones(data.tombstones),
+  };
 }
 
 export async function pullShelf(options = {}) {
@@ -172,11 +243,11 @@ export async function pullShelf(options = {}) {
   if (!url) return { ok: false, reason: 'unconfigured', articles: [] };
   try {
     const response = await send(fetchImpl, url, { headers: shelfHeaders(phrase) });
-    if (!response) return { ok: false, reason: 'unreachable', articles: [] };
-    if (response.status === 401) return { ok: false, reason: 'rejected', articles: [] };
-    const articles = articlesFrom(await readJson(response));
-    if (!response.ok || !articles) return { ok: false, reason: 'unreachable', articles: [] };
-    return { ok: true, articles };
+    if (!response) return { ok: false, reason: 'unreachable', articles: [], tombstones: [] };
+    if (response.status === 401) return { ok: false, reason: 'rejected', articles: [], tombstones: [] };
+    const document = documentFrom(await readJson(response));
+    if (!response.ok || !document) return { ok: false, reason: 'unreachable', articles: [], tombstones: [] };
+    return { ok: true, articles: document.articles, tombstones: document.tombstones };
   } catch {
     return { ok: false, reason: 'unreachable', articles: [] };
   }
@@ -195,29 +266,67 @@ export async function publishArticle(article, options = {}) {
   const read = await send(fetchImpl, url, { headers });
   if (!read) return { ok: false, reason: 'unreachable', articles: [] };
   if (read.status === 401) return { ok: false, reason: 'rejected', articles: [] };
-  const current = articlesFrom(await readJson(read));
+  const current = documentFrom(await readJson(read));
   if (!read.ok || !current) return { ok: false, reason: 'unreachable', articles: [] };
 
   const savedAt = Number(article.savedAt) || Date.now();
+  if (blockedByTombstone(text, savedAt, current.tombstones)) {
+    return { ok: true, blocked: true, articles: current.articles, tombstones: current.tombstones };
+  }
   const payload = {
     id: article.id || 'custom',
     label: article.label || 'Custom',
     text,
     updatedAt: savedAt,
   };
-  const existing = current.find((item) => item.text === text);
-  if (existing && savedAt <= existing.updatedAt) return { ok: true, articles: current };
+  const existing = current.articles.find((item) => item.text === text);
+  if (existing && savedAt <= existing.updatedAt) return { ok: true, articles: current.articles };
 
   const put = await send(fetchImpl, url, {
     method: 'PUT',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({ article: payload }),
   });
-  if (!put) return { ok: false, reason: 'unreachable', articles: current };
+  if (!put) return { ok: false, reason: 'unreachable', articles: current.articles };
   if (put.status === 401) return { ok: false, reason: 'rejected', articles: [] };
-  const saved = articlesFrom(await readJson(put));
-  if (!put.ok || !saved || !saved.some((item) => item.text === text)) {
-    return { ok: false, reason: 'unreachable', articles: saved || current };
+  const saved = documentFrom(await readJson(put));
+  if (!put.ok || !saved) return { ok: false, reason: 'unreachable', articles: current.articles };
+  if (blockedByTombstone(text, savedAt, saved.tombstones)) {
+    return { ok: true, blocked: true, articles: saved.articles, tombstones: saved.tombstones };
   }
-  return { ok: true, articles: saved };
+  if (!saved.articles.some((item) => item.text === text)) {
+    return { ok: false, reason: 'unreachable', articles: saved.articles };
+  }
+  return { ok: true, articles: saved.articles, tombstones: saved.tombstones };
+}
+
+export async function deleteSharedArticle(article, options = {}) {
+  const text = String(article?.text || '');
+  if (!text.trim()) return { ok: false, reason: 'size', articles: [] };
+  const deletedAt = Number(options.deletedAt) || Date.now();
+  const newer = loadHistory().find(
+    (item) => item.text === text && Number(item.updatedAt) > deletedAt,
+  );
+  if (newer) return { ok: true, skipped: true, articles: loadHistory() };
+  forgetLocally(text, deletedAt);
+  const phrase = normalizePhrase(options.phrase ?? loadPhrase());
+  const fetchImpl = options.fetchImpl || fetch;
+  const url = options.url || shelfUrl();
+  if (!phrase) return { ok: true, reason: 'missing', articles: loadHistory() };
+  if (!url) return { ok: true, reason: 'unconfigured', articles: loadHistory() };
+
+  const response = await send(fetchImpl, url, {
+    method: 'DELETE',
+    headers: { ...shelfHeaders(phrase), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!response) return { ok: false, reason: 'unreachable', articles: loadHistory() };
+  if (response.status === 401) return { ok: false, reason: 'rejected', articles: loadHistory() };
+  const saved = documentFrom(await readJson(response));
+  if (!response.ok || !saved || saved.articles.some((item) => item.text === text)) {
+    return { ok: false, reason: 'unreachable', articles: saved?.articles || loadHistory() };
+  }
+  applyTombstones(saved.tombstones);
+  writeShelfCache(saved.articles, phrase);
+  return { ok: true, articles: saved.articles, tombstones: saved.tombstones };
 }
