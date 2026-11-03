@@ -164,6 +164,10 @@ describe('page and engine', () => {
     expect(checkedPlay[1]).toBe(DEFAULT_CONFIG.playMode);
     expect(html).toContain('the rest come from memory');
     expect(html).toContain('id="idle-recital"');
+    expect(html).toContain('id="quadrant-board"');
+    expect(html).toContain('id="idle-areas"');
+    expect(html).toContain('Top left is A–G');
+    expect(html).toContain('tap the corner for its group');
 
     const themes = [...html.matchAll(/data-theme="([^"]+)" aria-pressed="(true|false)"/g)];
     expect(themes.map((match) => match[1])).toEqual([...THEMES]);

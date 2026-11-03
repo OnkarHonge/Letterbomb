@@ -269,6 +269,48 @@ h3 {
   border-radius: 22px;
   background: var(--bg-arena);
 }
+#quadrant-board {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.quadrant-edge {
+  position: absolute;
+  background: var(--line);
+}
+.quadrant-edge.is-col-a,
+.quadrant-edge.is-col-b {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.quadrant-edge.is-col-a { left: 42%; }
+.quadrant-edge.is-col-b { left: 58%; }
+.quadrant-edge.is-row-a,
+.quadrant-edge.is-row-b {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.quadrant-edge.is-row-a { top: 42%; }
+.quadrant-edge.is-row-b { top: 58%; }
+.quadrant-label {
+  position: absolute;
+  z-index: 4;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-arena) 84%, transparent);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.quadrant-label.is-nw { top: 40px; left: 12px; }
+.quadrant-label.is-ne { top: 40px; right: 12px; }
+.quadrant-label.is-sw { bottom: 18px; left: 12px; }
+.quadrant-label.is-se { bottom: 18px; right: 12px; }
+
 .arena-top {
   display: flex;
   justify-content: space-between;

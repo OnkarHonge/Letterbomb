@@ -99,10 +99,10 @@
         </div>
         <div id="overlay" class="overlay">
           <div id="panel-idle" class="panel">
-            <h2 id="idle-title">Press the first letter</h2>
+            <h2 id="idle-title">Tap the corner</h2>
             <ol class="steps">
               <li id="idle-read">Read the highlighted word.</li>
-              <li id="idle-press">Press its first letter before the bar runs out.</li>
+              <li id="idle-press">Tap its corner before the bar runs out.</li>
               <li id="idle-miss">Hits build a streak. A miss freezes the board, then you continue.</li>
               <li>Each breath fills a blank in a sentence you just read.</li>
             </ol>
@@ -110,6 +110,7 @@
             <p class="hint">Space also starts, pauses, and resumes.</p>
             <p id="idle-round" class="hint"></p>
             <p id="idle-recital" class="hint" hidden></p>
+            <p id="idle-areas" class="hint">On a phone, tap a corner of the reading area. Top left is A–G, top right is H–M, bottom left is N–S, and bottom right is T–Z. The cross in the middle does nothing. A keyboard letter still counts.</p>
             <p id="idle-spot" class="hint" hidden></p>
             <p id="idle-best" class="hint" hidden></p>
           </div>
@@ -154,6 +155,16 @@
           </div>
         </div>
       </div>
+      <div id="quadrant-board" hidden>
+        <span class="quadrant-edge is-col-a"></span>
+        <span class="quadrant-edge is-col-b"></span>
+        <span class="quadrant-edge is-row-a"></span>
+        <span class="quadrant-edge is-row-b"></span>
+        <span class="quadrant-label is-nw">A–G</span>
+        <span class="quadrant-label is-ne">H–M</span>
+        <span class="quadrant-label is-sw">N–S</span>
+        <span class="quadrant-label is-se">T–Z</span>
+      </div>
     </section>
 
     <section class="keypad-dock" id="keypad-dock" aria-label="On-screen keys">
@@ -182,7 +193,7 @@
       <div class="choice">
         <label>
           <input type="radio" name="play" value="words" checked>
-          <span><strong>Words</strong><small>Each word asks for its first letter.</small></span>
+          <span><strong>Words</strong><small>Each word asks for its first letter. On a phone, tap the corner for its group.</small></span>
         </label>
         <label>
           <input type="radio" name="play" value="recital">
@@ -298,7 +309,7 @@
         <input id="cfg-sound" type="checkbox" checked>
       </label>
       <label class="check">
-        <span><strong>On-screen keys</strong><p>Useful on a phone, or when you want to click instead of type.</p></span>
+        <span><strong>On-screen keys</strong><p>Shows the letter keys during Recital. Words uses the four corners.</p></span>
         <input id="cfg-keypad" type="checkbox" checked>
       </label>
       <label class="check">

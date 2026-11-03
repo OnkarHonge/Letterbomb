@@ -1,3 +1,4 @@
+import { missLine } from '../engine/quadrant.js';
 import { cueChars, hiddenWordLabel, spotFace } from '../engine/spot.js';
 import { must, setText } from './dom.js';
 import {
@@ -35,6 +36,7 @@ export function pauseRule(responded, phase) {
 export const RECALL_QUESTION = 'Which word fills the blank?';
 export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
 export const RECITAL_IDLE = 'Recital is on. A phrase stays up to read. The first letter hides it, and the rest come from memory on a short fuse.';
+export const QUADRANT_IDLE = 'On a phone, tap a corner of the reading area. Top left is A–G, top right is H–M, bottom left is N–S, and bottom right is T–Z. The cross in the middle does nothing. A keyboard letter still counts.';
 
 /** A wide space is named Pause. A dash stays visible and is still a gap. */
 export function wordMarks(word) {
@@ -303,6 +305,8 @@ export function createPainter() {
   const idleBest = must('idle-best');
   const idleSpot = must('idle-spot');
   const idleRecital = must('idle-recital');
+  const idleAreas = must('idle-areas');
+  const quadrantBoard = must('quadrant-board');
   const idleRound = must('idle-round');
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
@@ -765,10 +769,7 @@ export function createPainter() {
 
     strike.hidden = snap.status !== 'frozen';
     if (snap.status === 'frozen') {
-      const sentence = snap.missReason === 'wrong'
-        ? `That key was ${snap.missedKey}. This letter is ${snap.answer}.`
-        : `Time ran out. This letter is ${snap.answer}.`;
-      setText(strikeText, sentence);
+      setText(strikeText, missLine(snap.missReason, snap.missedKey, snap.answer));
       setText(strikeSub, `Moving on in ${Math.max(0, snap.freezeLeftMs / 1000).toFixed(1)} s`);
     }
 
@@ -789,16 +790,18 @@ export function createPainter() {
 
     setText(idleRound, roundNote(config.roundSize, config.endQuestion));
     const recitalOn = config.playMode === 'recital';
-    setText(idleTitle, recitalOn ? 'Read the phrase' : 'Press the first letter');
+    setText(idleTitle, recitalOn ? 'Read the phrase' : 'Tap the corner');
     setText(idleRead, recitalOn ? 'Read the highlighted phrase.' : 'Read the highlighted word.');
     setText(
       idlePress,
       recitalOn
         ? 'Press the first letter when you have it. The phrase hides, and the rest follow from memory.'
-        : 'Press its first letter before the bar runs out.',
+        : 'Tap its corner before the bar runs out.',
     );
     idleRecital.hidden = !recitalOn;
     setText(idleRecital, recitalOn ? RECITAL_IDLE : '');
+    idleAreas.hidden = recitalOn;
+    setText(idleAreas, recitalOn ? '' : QUADRANT_IDLE);
     idleSpot.hidden = recitalOn || !config.spotCheck;
     setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break'
@@ -873,7 +876,9 @@ export function createPainter() {
     }
 
     const runActive = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
-    keypadDock.hidden = config.focusMode || !runActive;
+    const wordsOn = config.playMode !== 'recital';
+    quadrantBoard.hidden = !(wordsOn && snap.status === 'playing');
+    keypadDock.hidden = config.focusMode || !runActive || wordsOn;
     keypadBody.hidden = !config.showKeypad;
     setText(toggleKeypad, config.showKeypad ? 'Hide keys' : 'Show keys');
     toggleKeypad.setAttribute('aria-expanded', String(config.showKeypad));

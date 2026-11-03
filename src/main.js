@@ -6,6 +6,7 @@
 import { createSound } from './audio/sound.js';
 import { PRESETS } from './data/presets.js';
 import { createGame } from './engine/game.js';
+import { missLine, zoneAt } from './engine/quadrant.js';
 import { countWords } from './engine/parseText.js';
 import { loadSave, writeSave } from './storage.js';
 import { must, setText } from './ui/dom.js';
@@ -139,12 +140,7 @@ function handleEvent(event) {
     sound.miss();
     painter.pop(event.reason === 'wrong' ? 'Miss' : 'Slow', 'miss');
     const answer = event.answer || '?';
-    setText(
-      live,
-      event.reason === 'wrong'
-        ? `That key was ${event.pressed}. This letter is ${answer}.`
-        : `Time ran out. This letter is ${answer}.`,
-    );
+    setText(live, missLine(event.reason, event.pressed, answer));
     return;
   }
 
@@ -354,6 +350,18 @@ must('overlay').addEventListener('click', (event) => {
     sound.unlock();
     if (game.acknowledgeRecall()) drain();
   }
+});
+
+must('arena').addEventListener('pointerdown', (event) => {
+  if (event.button > 0) return;
+  if (event.target.closest('button, a, input, textarea, select, label')) return;
+  if (game.config.playMode !== 'words' || game.status !== 'playing') return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const zone = zoneAt(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
+  if (!zone) return;
+  event.preventDefault();
+  sound.unlock();
+  if (game.pressArea(zone, performance.now())) drain();
 });
 
 must('karaoke').addEventListener('click', (event) => {

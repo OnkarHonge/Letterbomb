@@ -2,6 +2,7 @@ import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, isTerminator, normalizeKey, parseText } from './parseText.js';
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
+import { zoneForKey, zoneName } from './quadrant.js';
 import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
 import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
 import { wordDeadlineMs } from './timing.js';
@@ -555,6 +556,24 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     return true;
   }
 
+  function pressArea(zone, at = now()) {
+    if (status !== STATUS.PLAYING || recital) return false;
+    const name = zoneName(zone);
+    if (!name) return false;
+    const word = words[index];
+    if (at - lastPressAt < INPUT_LOCK_MS) return false;
+    if (!word?.isTarget || responded) return false;
+    if (spotPhase === 'look' || spotPhase === 'reveal') return false;
+    if (at - wordStartedAt >= deadlineMs) return false;
+    const expected = spotPhase === 'answer' ? cueFor(word)?.key : word.targetChar;
+    const wanted = zoneForKey(expected);
+    if (!wanted) return false;
+    lastPressAt = at;
+    if (zone === wanted) hit(at);
+    else miss('wrong', at, name);
+    return true;
+  }
+
   function tick(at = now()) {
     if (held) return;
     if (!words.length) return;
@@ -704,6 +723,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     acknowledgeRecall,
     recallLocked,
     press,
+    pressArea,
     tick,
     snapshot,
     consumeEvents() {

@@ -1420,3 +1420,69 @@ describe('recital', () => {
     expect(game.snapshot(20)).toMatchObject({ recital: { phase: 'riff' }, score: 100 });
   });
 });
+
+describe('quadrant taps', () => {
+  it('scores the corner that owns the first letter and still takes a key', () => {
+    const game = setup('Alpha Hotel');
+    game.start(0);
+    expect(game.pressArea('nw', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({ index: 1, score: 100, streak: 1 });
+    expect(game.press('h', 80)).toBe(true);
+    expect(game.status).toBe(STATUS.FINISHED);
+  });
+
+  it('misses the wrong corner and names that area', () => {
+    const game = setup('Alpha', { freezeSec: 1 });
+    game.start(0);
+    expect(game.pressArea('se', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({
+      status: STATUS.FROZEN,
+      misses: 1,
+      missedKey: 'T–Z',
+      answer: 'A',
+    });
+  });
+
+  it('leaves a tap on a digit word unanswered', () => {
+    const game = setup('4 cats');
+    game.start(0);
+    expect(game.pressArea('nw', 20)).toBe(false);
+    expect(game.snapshot(20)).toMatchObject({ index: 0, misses: 0, score: 0 });
+    expect(game.press('4', 30)).toBe(true);
+    expect(game.snapshot(30).index).toBe(1);
+  });
+
+  it('answers a spot check by the marked letter’s corner', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200, freezeSec: 1 });
+    game.start(0);
+    expect(game.pressArea('se', 20)).toBe(false);
+    game.tick(200);
+    expect(game.pressArea('se', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({
+      score: 100,
+      spot: { phase: 'reveal' },
+      answer: 'W',
+    });
+  });
+
+  it('names the wrong corner on a spot check', () => {
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200, freezeSec: 1 });
+    game.start(0);
+    game.tick(200);
+    expect(game.pressArea('nw', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({
+      status: STATUS.FROZEN,
+      misses: 1,
+      missedKey: 'A–G',
+      answer: 'W',
+      spot: { phase: 'answer' },
+    });
+  });
+
+  it('does not take a corner during recital', () => {
+    const game = setup('Alpha Beta Golf Hotel', { playMode: 'recital' });
+    game.start(0);
+    expect(game.pressArea('nw', 20)).toBe(false);
+    expect(game.snapshot(20)).toMatchObject({ score: 0, recital: { phase: 'look' } });
+  });
+});
