@@ -1,5 +1,4 @@
 import { DEFAULT_CONFIG, LIMITS } from './config.js';
-import { VOICE_LATE_MS } from './speech.js';
 
 /** A beat with no letter keeps this share of the plain word slot. */
 const GAP_FRACTION = 1 / 3;
@@ -32,7 +31,6 @@ export function wordDeadlineMs(word, config = {}) {
   if (word?.hasPunctuation) time *= punctuation;
   if (word?.isOpening) time *= opening;
   if (word?.isTarget) time += forgiveness;
-  if (word?.isTarget && config.playMode === 'voice') time += VOICE_LATE_MS;
   return Math.max(1, Math.round(time));
 }
 

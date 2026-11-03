@@ -1,5 +1,4 @@
 import { DEFAULT_CONFIG, PACE_PRESETS, matchingPace, pacePatch } from '../engine/config.js';
-import { VOICE_LATE_MS } from '../engine/speech.js';
 import { wordDeadlineMs } from '../engine/timing.js';
 import { must, setText } from './dom.js';
 
@@ -8,16 +7,12 @@ export function wordWindowNote(config) {
   const marked = wordDeadlineMs({ hasPunctuation: true, isTarget: true }, config);
   const opened = wordDeadlineMs({ hasPunctuation: false, isTarget: true, isOpening: true }, config);
   const gap = wordDeadlineMs({ isGap: true }, config);
-  const lines = [
+  return [
     `A normal word gives you ${plain} ms.`,
     `A word with punctuation gives you ${marked} ms.`,
     `The first word after a window gives you ${opened} ms.`,
     `A dash, an ellipsis, or a double space gives you ${gap} ms.`,
-  ];
-  if (config.playMode === 'voice') {
-    lines.push(`Speak adds ${VOICE_LATE_MS} ms on a word that needs a letter, so the phone can hear it.`);
-  }
-  return lines.join(' ');
+  ].join(' ');
 }
 
 export function bindSettings(game, { onChange }) {
@@ -120,7 +115,7 @@ export function bindSettings(game, { onChange }) {
   }
 
   function applyForm() {
-    if (selectedPlay() !== 'recital' && game.config.playMode === 'recital') {
+    if (selectedPlay() === 'words' && game.config.playMode === 'recital') {
       spot.checked = game.config.spotCheck;
     }
     game.setConfig(readForm());

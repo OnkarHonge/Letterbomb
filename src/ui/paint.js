@@ -34,30 +34,7 @@ export function pauseRule(responded, phase) {
 
 export const RECALL_QUESTION = 'Which word fills the blank?';
 export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
-export const SPOT_IDLE_VOICE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Say the marked block.';
 export const RECITAL_IDLE = 'Recital is on. A phrase stays up to read. The first letter hides it, and the rest come from memory on a short fuse.';
-export const VOICE_IDLE = 'Say the letter name or the radio word, such as bee or bravo. The phone sends that sound to its speech service. A headset keeps the game sounds out of the microphone.';
-
-export function strikeSentence(snap) {
-  const answer = snap?.answer || '?';
-  if (snap?.missReason === 'wrong') {
-    const heard = snap.missedKey || '?';
-    return snap.config?.playMode === 'voice'
-      ? `Heard ${heard}. This letter is ${answer}.`
-      : `That key was ${heard}. This letter is ${answer}.`;
-  }
-  if (snap?.missReason === 'unheard') return `No letter came through. This letter is ${answer}.`;
-  return `Time ran out. This letter is ${answer}.`;
-}
-
-export function micLine(state) {
-  if (state === 'missing') return "This browser can't hear letters. Use Chrome or Safari.";
-  if (state === 'blocked') return 'The microphone is blocked. Allow it in the browser settings, then press Resume.';
-  if (state === 'network') return 'The phone needs a connection to hear the letter. Press Resume to try again.';
-  if (state === 'hearing') return 'Hearing you';
-  if (state === 'listening') return 'Listening';
-  return '';
-}
 
 /** A wide space is named Pause. A dash stays visible and is still a gap. */
 export function wordMarks(word) {
@@ -92,11 +69,10 @@ export function targetHud(snap) {
     if (snap.spot.phase === 'answer' && snap.status !== 'frozen') return { label: 'Marked block', value: '•' };
     return { label: 'Letter', value: snap.answer || '—' };
   }
-  const say = snap.config?.playMode === 'voice';
   if (!snap.config?.showTargetHud && snap.status === 'playing') {
-    return { label: say ? 'Say' : 'First letter', value: '•' };
+    return { label: 'First letter', value: '•' };
   }
-  return { label: playing ? (say ? 'Say' : 'First letter') : 'Up next', value: snap.answer || '—' };
+  return { label: playing ? 'First letter' : 'Up next', value: snap.answer || '—' };
 }
 
 export function roundNote(roundSize, endQuestion = true) {
@@ -327,8 +303,6 @@ export function createPainter() {
   const idleBest = must('idle-best');
   const idleSpot = must('idle-spot');
   const idleRecital = must('idle-recital');
-  const idleVoice = must('idle-voice');
-  const micStatus = must('mic-status');
   const idleRound = must('idle-round');
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
@@ -744,8 +718,7 @@ export function createPainter() {
     const remaining = snap.status === 'frozen' ? 0 : 1 - snap.progress;
     timerFill.style.transform = `scaleX(${Math.max(0, Math.min(1, remaining))})`;
     timer.classList.toggle('is-armed', snap.status === 'playing');
-    timer.classList.toggle('is-hearing', Boolean(snap.hearing));
-    timer.classList.toggle('is-low', snap.status === 'playing' && !snap.hearing && snap.progress > 0.72);
+    timer.classList.toggle('is-low', snap.status === 'playing' && snap.progress > 0.72);
     timer.classList.toggle('is-frozen', snap.status === 'frozen');
     const remainingPct = String(Math.round(Math.max(0, Math.min(1, remaining)) * 100));
     if (timer.getAttribute('aria-valuenow') !== remainingPct) {
@@ -755,15 +728,13 @@ export function createPainter() {
     const hud = targetHud(snap);
     setText(hudTargetLabel, hud.label);
     setText(hudTarget, hud.value);
-    const timerLabel = snap.hearing
-      ? 'Hearing the letter'
-      : snap.recital?.phase === 'look'
-        ? 'Time left to read this phrase'
-        : snap.recital?.phase === 'riff'
-          ? 'Time left to recall this word'
-          : snap.spot?.phase === 'look'
-            ? 'Time left to read this word'
-            : 'Time left on this word';
+    const timerLabel = snap.recital?.phase === 'look'
+      ? 'Time left to read this phrase'
+      : snap.recital?.phase === 'riff'
+        ? 'Time left to recall this word'
+        : snap.spot?.phase === 'look'
+          ? 'Time left to read this word'
+          : 'Time left on this word';
     if (timer.getAttribute('aria-label') !== timerLabel) timer.setAttribute('aria-label', timerLabel);
     setText(hudStreak, String(snap.streak));
     setText(hudScore, snap.score.toLocaleString());
@@ -794,7 +765,10 @@ export function createPainter() {
 
     strike.hidden = snap.status !== 'frozen';
     if (snap.status === 'frozen') {
-      setText(strikeText, strikeSentence(snap));
+      const sentence = snap.missReason === 'wrong'
+        ? `That key was ${snap.missedKey}. This letter is ${snap.answer}.`
+        : `Time ran out. This letter is ${snap.answer}.`;
+      setText(strikeText, sentence);
       setText(strikeSub, `Moving on in ${Math.max(0, snap.freezeLeftMs / 1000).toFixed(1)} s`);
     }
 
@@ -815,25 +789,18 @@ export function createPainter() {
 
     setText(idleRound, roundNote(config.roundSize, config.endQuestion));
     const recitalOn = config.playMode === 'recital';
-    const voiceOn = config.playMode === 'voice';
-    const mic = extras?.mic || 'off';
-    setText(idleTitle, recitalOn ? 'Read the phrase' : voiceOn ? 'Say the first letter' : 'Press the first letter');
+    setText(idleTitle, recitalOn ? 'Read the phrase' : 'Press the first letter');
     setText(idleRead, recitalOn ? 'Read the highlighted phrase.' : 'Read the highlighted word.');
     setText(
       idlePress,
       recitalOn
         ? 'Press the first letter when you have it. The phrase hides, and the rest follow from memory.'
-        : voiceOn
-          ? 'Say its first letter before the bar runs out.'
-          : 'Press its first letter before the bar runs out.',
+        : 'Press its first letter before the bar runs out.',
     );
     idleRecital.hidden = !recitalOn;
     setText(idleRecital, recitalOn ? RECITAL_IDLE : '');
-    const voiceError = mic === 'missing' || mic === 'blocked' || mic === 'network';
-    idleVoice.hidden = !voiceOn;
-    setText(idleVoice, voiceOn ? (voiceError ? micLine(mic) : VOICE_IDLE) : '');
     idleSpot.hidden = recitalOn || !config.spotCheck;
-    setText(idleSpot, recitalOn || !config.spotCheck ? '' : voiceOn ? SPOT_IDLE_VOICE : SPOT_IDLE);
+    setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break'
       ? Math.max(0, snap.index - snap.roundStart)
       : config.roundSize;
@@ -906,17 +873,7 @@ export function createPainter() {
     }
 
     const runActive = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
-    const micShown = snap.hearing ? 'hearing' : (extras?.mic || 'off');
-    let micText = '';
-    if (config.playMode === 'voice') {
-      if (snap.hearing) micText = micLine('hearing');
-      else if (micShown === 'blocked' || micShown === 'missing' || micShown === 'network') micText = micLine(micShown);
-      else if (runActive && micShown === 'listening') micText = micLine('listening');
-    }
-    micStatus.hidden = !micText;
-    micStatus.classList.toggle('is-bad', micShown === 'blocked' || micShown === 'missing' || micShown === 'network');
-    setText(micStatus, micText);
-    keypadDock.hidden = config.focusMode || !runActive || config.playMode === 'voice';
+    keypadDock.hidden = config.focusMode || !runActive;
     keypadBody.hidden = !config.showKeypad;
     setText(toggleKeypad, config.showKeypad ? 'Hide keys' : 'Show keys');
     toggleKeypad.setAttribute('aria-expanded', String(config.showKeypad));

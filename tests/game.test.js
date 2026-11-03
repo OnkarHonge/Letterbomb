@@ -5,7 +5,6 @@ import { recallBounds, selectTarget } from '../src/engine/recall.js';
 import { RECALL_BONUS } from '../src/engine/scoring.js';
 import { SPOT_REVEAL_MS } from '../src/engine/spot.js';
 import { recitalFuseMs } from '../src/engine/recital.js';
-import { VOICE_HOLD_MS, VOICE_LATE_MS } from '../src/engine/speech.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
 const CLOZE = 'Bravo quietly rests. Delta gently stays. Foxtrot softly leaves. Hotel calmly waits.';
@@ -1419,62 +1418,5 @@ describe('recital', () => {
     game.start(0);
     expect(game.press('é', 20)).toBe(true);
     expect(game.snapshot(20)).toMatchObject({ recital: { phase: 'riff' }, score: 100 });
-  });
-
-  it('takes a spoken letter on the speech-start time and ignores keys', () => {
-    const game = setup('Alpha Beta', { playMode: 'voice' });
-    game.start(0);
-    const deadline = game.snapshot(0).deadlineMs;
-    const typed = wordDeadlineMs(
-      { isTarget: true, isOpening: true },
-      { ...game.config, playMode: 'words' },
-    );
-    expect(deadline - typed).toBe(VOICE_LATE_MS);
-    expect(game.press('a', 20)).toBe(false);
-    expect(game.snapshot(20)).toMatchObject({ hits: 0, misses: 0, index: 0 });
-    expect(game.armVoice(40)).toBe(true);
-    expect(game.snapshot(deadline).hearing).toBe(true);
-    expect(game.snapshot(deadline).progress).toBeLessThan(1);
-    game.tick(deadline + 10);
-    expect(game.status).toBe(STATUS.PLAYING);
-    expect(game.press('a', deadline + 400, 'voice')).toBe(true);
-    expect(game.snapshot().avgReaction).toBe(40);
-    expect(game.snapshot().index).toBe(1);
-    expect(game.hear('bee', deadline + 500)).toBe(true);
-    expect(game.status).toBe(STATUS.FINISHED);
-  });
-
-  it('drops a voice that never becomes a letter, and keeps a noise inside the bar', () => {
-    const game = setup('Alpha', { playMode: 'voice', freezeSec: 0 });
-    game.start(0);
-    const deadline = game.snapshot(0).deadlineMs;
-    expect(game.armVoice(30)).toBe(true);
-    expect(game.releaseVoice(80)).toBe(true);
-    expect(game.snapshot(80)).toMatchObject({ hearing: false, misses: 0, status: STATUS.PLAYING });
-    expect(game.hear('hello there', 90)).toBe(false);
-    expect(game.armVoice(deadline)).toBe(false);
-    game.armVoice(50);
-    game.tick(50 + VOICE_HOLD_MS);
-    expect(game.consumeEvents().find((event) => event.type === 'miss')).toMatchObject({
-      reason: 'unheard',
-      answer: 'A',
-    });
-  });
-
-  it('says the marked block during a spot check', () => {
-    const game = setup('Word Beta', { playMode: 'voice', spotCheck: true, spotLookMs: 200, freezeSec: 1 });
-    game.start(0);
-    expect(game.snapshot(0).deadlineMs).toBe(200);
-    expect(game.armVoice(20)).toBe(false);
-    expect(game.hear('w', 20)).toBe(false);
-    game.tick(200);
-    expect(game.snapshot(200).deadlineMs).toBe(100 + VOICE_LATE_MS);
-    expect(game.press('w', 220)).toBe(false);
-    expect(game.hear(['hello', 'whiskey'], 240)).toBe(true);
-    expect(game.snapshot(240)).toMatchObject({
-      score: 100,
-      spot: { phase: 'reveal' },
-      answer: 'W',
-    });
   });
 });

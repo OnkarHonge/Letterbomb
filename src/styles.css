@@ -297,17 +297,8 @@ h3 {
   transform-origin: left center;
 }
 .timer.is-armed #timer-fill { background: var(--accent); }
-.timer.is-hearing #timer-fill { background: var(--accent); }
 .timer.is-low #timer-fill,
 .timer.is-frozen #timer-fill { background: var(--miss); }
-.mic-status {
-  flex: 0 0 auto;
-  margin: -2px 0 8px;
-  font-size: 0.92rem;
-  font-weight: 800;
-  color: var(--accent);
-}
-.mic-status.is-bad { color: var(--miss); }
 
 .strike, .pause-bar {
   position: absolute;
@@ -683,7 +674,6 @@ textarea {
   padding-block: 8px;
 }
 .choice, .theme-grid { grid-template-columns: 1fr 1fr; margin-top: 10px; }
-.choice { grid-template-columns: 1fr; }
 .choice label, .preset, .theme-btn {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -752,7 +742,6 @@ textarea {
   .preset-grid { grid-template-columns: 1fr 1fr; }
   .pace-grid { grid-template-columns: repeat(3, 1fr); }
   .theme-grid { grid-template-columns: repeat(4, 1fr); }
-  .choice { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (min-width: 840px) {
