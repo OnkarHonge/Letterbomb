@@ -311,6 +311,12 @@ export function createPainter() {
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
   const idleStart = must('idle-start');
+  const idleDrill = must('idle-drill');
+  const idleDrillNote = must('idle-drill-note');
+  const drillPanel = must('drill');
+  const drillLetter = must('drill-letter');
+  const drillNote = must('drill-note');
+  const drillTally = must('drill-tally');
   const breakTitle = must('break-title');
   const breakCopy = must('break-copy');
   const breakRest = must('break-rest');
@@ -710,9 +716,10 @@ export function createPainter() {
     }
     state.status = snap.status;
 
-    karaoke.hidden = config.viewMode !== 'karaoke';
-    rsvp.hidden = config.viewMode !== 'rsvp';
-    timer.hidden = !config.showTimeBar;
+    const drilling = Boolean(extras?.drill?.on);
+    karaoke.hidden = drilling || config.viewMode !== 'karaoke';
+    rsvp.hidden = drilling || config.viewMode !== 'rsvp';
+    timer.hidden = drilling || !config.showTimeBar;
     ensureWindow(snap, words);
     syncFace(snap, words);
     flushReveal();
@@ -752,10 +759,12 @@ export function createPainter() {
         : Math.min(snap.index + 1, snap.total);
     setText(
       articleMeta,
-      snap.total ? `${snap.articleLabel} · ${shown} / ${snap.total}` : 'No article loaded',
+      extras?.drill?.on
+        ? 'Corner drill'
+        : snap.total ? `${snap.articleLabel} · ${shown} / ${snap.total}` : 'No article loaded',
     );
 
-    if (config.roundSize > 0 && snap.total && snap.status !== 'finished') {
+    if (!extras?.drill?.on && config.roundSize > 0 && snap.total && snap.status !== 'finished') {
       roundMeta.hidden = false;
       setText(
         roundMeta,
@@ -782,7 +791,15 @@ export function createPainter() {
     setText(pauseCopy, pauseRule(snap.responded, pausePhase));
     setText(idleMiss, missRule(config.freezeSec));
     const showOverlay = snap.status === 'idle' || snap.status === 'break' || snap.status === 'finished';
-    overlay.hidden = !showOverlay;
+    overlay.hidden = drilling || !showOverlay;
+    drillPanel.hidden = !drilling;
+    drillLetter.classList.toggle('is-miss', extras?.drill?.mark === 'miss');
+    setText(drillLetter, extras?.drill?.letter || '');
+    setText(drillNote, extras?.drill?.note || '');
+    setText(
+      drillTally,
+      drilling ? `${extras.drill.hits} right · streak ${extras.drill.streak}` : '',
+    );
     panelIdle.hidden = snap.status !== 'idle';
     panelBreak.hidden = snap.status !== 'break';
     panelDone.hidden = snap.status !== 'finished';
@@ -802,6 +819,8 @@ export function createPainter() {
     setText(idleRecital, recitalOn ? RECITAL_IDLE : '');
     idleAreas.hidden = recitalOn;
     setText(idleAreas, recitalOn ? '' : QUADRANT_IDLE);
+    idleDrill.hidden = recitalOn;
+    idleDrillNote.hidden = recitalOn;
     idleSpot.hidden = recitalOn || !config.spotCheck;
     setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break'
@@ -877,7 +896,7 @@ export function createPainter() {
 
     const runActive = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
     const wordsOn = config.playMode !== 'recital';
-    quadrantBoard.hidden = !(wordsOn && snap.status === 'playing');
+    quadrantBoard.hidden = !(wordsOn && (snap.status === 'playing' || extras?.drill?.on));
     keypadDock.hidden = config.focusMode || !runActive || wordsOn;
     keypadBody.hidden = !config.showKeypad;
     setText(toggleKeypad, config.showKeypad ? 'Hide keys' : 'Show keys');
