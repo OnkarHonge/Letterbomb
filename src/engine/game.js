@@ -4,6 +4,7 @@ import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
 import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
 import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
+import { chooseSpokenLetter, VOICE_HOLD_MS } from './speech.js';
 import { wordDeadlineMs } from './timing.js';
 
 /**
@@ -56,6 +57,11 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let spotPhase = null;
   let phraseSpans = [];
   let recital = null;
+  let voiceArmedAt = null;
+
+  function clearHearing() {
+    voiceArmedAt = null;
+  }
 
   function emit(event) {
     events.push(event);
@@ -125,12 +131,14 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function enterAnswer(at) {
+    clearHearing();
     spotPhase = 'answer';
     wordStartedAt = at;
     deadlineMs = deadlineFor(words[index]);
   }
 
   function openLook(span, at) {
+    clearHearing();
     const phraseWords = words.slice(span.start, span.end);
     opening = Boolean(pendingOpening);
     if (opening) pendingOpening = false;
@@ -148,6 +156,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function enterRiff(at, cursor) {
+    clearHearing();
     index = cursor;
     recital.phase = 'riff';
     responded = false;
@@ -159,6 +168,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function beginWord(at) {
+    clearHearing();
     const span = spanContaining(index);
     if (config.playMode === 'recital' && span?.kind === 'phrase' && span.start === index) {
       openLook(span, at);
@@ -240,6 +250,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function hit(at, reactionOverride) {
+    clearHearing();
     const reaction = reactionOverride !== undefined
       ? reactionOverride
       : Math.max(0, Math.round(at - wordStartedAt));
@@ -268,6 +279,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function miss(reason, at, pressed) {
+    clearHearing();
     misses += 1;
     streak = 0;
     ascent = 0;
@@ -309,6 +321,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     recital = null;
     phraseSpans = [];
     spots = new Map();
+    clearHearing();
     lastPressAt = Number.NEGATIVE_INFINITY;
     epoch += 1;
     emit({ type: 'load', total: words.length });
@@ -326,6 +339,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       fillSpots();
     }
     if (!spotLive() && spotPhase && spotPhase !== 'reveal') spotPhase = null;
+    if (config.playMode !== 'voice') clearHearing();
     if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
       if (recital?.phase === 'look') {
         const lookMs = recitalLookMs(words.slice(recital.start, recital.end), config, opening);
@@ -364,6 +378,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
   function pause() {
     if (status !== STATUS.PLAYING) return false;
+    clearHearing();
     status = STATUS.PAUSED;
     emit({ type: 'pause' });
     return true;
@@ -436,6 +451,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (status !== STATUS.PAUSED) return false;
     const nextIndex = Number(target);
     if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= words.length) return false;
+    clearHearing();
     responded = false;
     missReason = null;
     missedKey = null;
@@ -501,9 +517,48 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     return true;
   }
 
-  function press(raw, at = now()) {
+  function owedNow(word) {
+    if (spotPhase === 'answer') return cueFor(word)?.key ?? null;
+    return word?.targetChar ?? null;
+  }
+
+  function armVoice(at = now()) {
+    if (config.playMode !== 'voice') return false;
     if (status !== STATUS.PLAYING) return false;
+    if (voiceArmedAt !== null) return true;
+    if (responded || recital) return false;
     const word = words[index];
+    if (!word?.isTarget) return false;
+    if (spotPhase === 'look' || spotPhase === 'reveal') return false;
+    if (at - wordStartedAt >= deadlineMs) return false;
+    voiceArmedAt = at;
+    return true;
+  }
+
+  function releaseVoice(at = now()) {
+    if (config.playMode !== 'voice' || voiceArmedAt === null) return false;
+    clearHearing();
+    if (status !== STATUS.PLAYING || responded) return true;
+    const word = words[index];
+    if (word?.isTarget && at - wordStartedAt >= deadlineMs) miss('unheard', at, null);
+    return true;
+  }
+
+  function hear(raws, at = now(), interim = false) {
+    if (config.playMode !== 'voice' || status !== STATUS.PLAYING) return false;
+    const word = words[index];
+    const expected = owedNow(word);
+    const letter = chooseSpokenLetter(raws, { interim, expected });
+    if (!letter) return false;
+    if (voiceArmedAt === null) armVoice(at);
+    return press(letter, at, 'voice');
+  }
+
+  function press(raw, at = now(), via = 'key') {
+    if (status !== STATUS.PLAYING) return false;
+    if (config.playMode === 'voice' && via !== 'voice') return false;
+    const word = words[index];
+    const judgedAt = via === 'voice' && voiceArmedAt !== null ? voiceArmedAt : at;
     if (recital?.phase === 'look') {
       if (at - wordStartedAt >= deadlineMs) return false;
       const key = normalizeKey(raw);
@@ -544,13 +599,17 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (at - lastPressAt < INPUT_LOCK_MS) return false;
     if (!word?.isTarget || responded) return false;
     if (spotPhase === 'look' || spotPhase === 'reveal') return false;
-    if (at - wordStartedAt >= deadlineMs) return false;
+    if (via === 'voice' && voiceArmedAt !== null) {
+      if (at - voiceArmedAt >= VOICE_HOLD_MS) return false;
+    } else if (judgedAt - wordStartedAt >= deadlineMs) return false;
     const key = normalizeKey(raw);
     if (!key) return false;
     const expected = spotPhase === 'answer' ? cueFor(word)?.key : word.targetChar;
     if (!expected) return false;
     lastPressAt = at;
-    if (key === expected) hit(at);
+    const reaction = Math.max(0, Math.round(judgedAt - wordStartedAt));
+    clearHearing();
+    if (key === expected) hit(at, reaction);
     else miss('wrong', at, key);
     return true;
   }
@@ -567,6 +626,13 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (status !== STATUS.PLAYING) return;
     if (!words[index]) {
       finish();
+      return;
+    }
+
+    if (voiceArmedAt !== null) {
+      if (at - voiceArmedAt < VOICE_HOLD_MS) return;
+      clearHearing();
+      if (words[index]?.isTarget && !responded) miss('unheard', at, null);
       return;
     }
 
@@ -630,7 +696,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     const total = words.length;
     let progress = 0;
     if (status === STATUS.PLAYING && deadlineMs > 0) {
-      progress = clamp01((at - wordStartedAt) / deadlineMs);
+      const mark = voiceArmedAt !== null ? voiceArmedAt : at;
+      progress = clamp01((mark - wordStartedAt) / deadlineMs);
     } else if (status === STATUS.FROZEN) {
       progress = 1;
     }
@@ -666,6 +733,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       responded,
       missReason,
       missedKey,
+      hearing: voiceArmedAt !== null,
       freezeLeftMs,
       articleLabel: labelText,
       word,
@@ -703,6 +771,9 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     answerRecall,
     acknowledgeRecall,
     recallLocked,
+    armVoice,
+    releaseVoice,
+    hear,
     press,
     tick,
     snapshot,

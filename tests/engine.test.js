@@ -11,6 +11,7 @@ import {
   wordKey,
 } from '../src/engine/parseText.js';
 import { pointsForHit } from '../src/engine/scoring.js';
+import { VOICE_LATE_MS } from '../src/engine/speech.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
 describe('parseText', () => {
@@ -159,6 +160,11 @@ describe('timing', () => {
     }, pace)).toBe(33);
     expect(wordDeadlineMs({ isGap: true }, { wpm: 150, forgivenessMs: 280 })).toBe(133);
     expect(wordDeadlineMs({ isTarget: true }, { wpm: 150, forgivenessMs: 280 })).toBe(680);
+    expect(wordDeadlineMs({ isTarget: true }, { wpm: 150, forgivenessMs: 280, playMode: 'voice' })).toBe(680 + VOICE_LATE_MS);
+    expect(wordDeadlineMs({ isGap: true }, { wpm: 150, playMode: 'voice' })).toBe(
+      wordDeadlineMs({ isGap: true }, { wpm: 150 }),
+    );
+    expect(wordDeadlineMs({ isTarget: false }, { wpm: 600, playMode: 'voice' })).toBe(100);
   });
 });
 
@@ -190,6 +196,7 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({ spotCheck: 'yes' }).spotCheck).toBe(false);
     expect(sanitizeConfig({}).spotCheck).toBe(false);
     expect(sanitizeConfig({ playMode: 'recital' }).playMode).toBe('recital');
+    expect(sanitizeConfig({ playMode: 'voice' }).playMode).toBe('voice');
     expect(sanitizeConfig({ playMode: 'nope' }).playMode).toBe('words');
     expect(sanitizeConfig({}).playMode).toBe('words');
     expect(sanitizeConfig({}).endQuestion).toBe(true);

@@ -98,7 +98,7 @@ export function matchingPace(config) {
 }
 
 export const VIEW_MODES = new Set(['karaoke', 'rsvp']);
-export const PLAY_MODES = new Set(['words', 'recital']);
+export const PLAY_MODES = new Set(['words', 'voice', 'recital']);
 export const THEMES = new Set(['signal', 'paper', 'night', 'contrast']);
 
 export function sanitizeConfig(input) {

@@ -10,8 +10,9 @@ import { countWords } from './engine/parseText.js';
 import { loadSave, writeSave } from './storage.js';
 import { must, setText } from './ui/dom.js';
 import { bindLibrary } from './ui/library.js';
-import { createPainter, recallPrompt } from './ui/paint.js';
+import { createPainter, micLine, recallPrompt, strikeSentence } from './ui/paint.js';
 import { bindSettings } from './ui/settings.js';
+import { createEar } from './voice/ear.js';
 
 const saved = loadSave();
 const game = createGame();
@@ -58,6 +59,7 @@ function buildKeys(chars, parent) {
     button.textContent = char;
     button.setAttribute('aria-label', `Press ${char}`);
     button.addEventListener('click', () => {
+      if (game.config.playMode === 'voice') return;
       sound.unlock();
       game.press(char, performance.now());
       drain();
@@ -79,13 +81,94 @@ function extras() {
   const notes = [];
   if (records.streak) notes.push('New best streak');
   if (records.score) notes.push('New best score');
-  return { best, recordNote: notes.join(' · ') };
+  return { best, recordNote: notes.join(' · '), mic: micState };
+}
+
+let micState = 'off';
+let earToken = '';
+let screenLock = null;
+let rendering = false;
+
+const ear = createEar({
+  Recognition: window.SpeechRecognition || window.webkitSpeechRecognition,
+  onArm() {
+    if (game.armVoice(performance.now()) && !rendering) drain();
+  },
+  onUtterance(texts, interim) {
+    const heard = game.hear(texts, performance.now(), interim);
+    if (heard && !rendering) drain();
+    return heard;
+  },
+  onIdle() {
+    if (game.releaseVoice(performance.now()) && !rendering) drain();
+  },
+  onState(state) {
+    micState = state;
+    if ((state === 'blocked' || state === 'network') && game.status === 'playing') game.pause();
+    if (state === 'blocked' || state === 'network' || state === 'missing') {
+      setText(live, micLine(state));
+    }
+    if (!rendering) drain();
+  },
+});
+
+function holdScreen() {
+  if (screenLock || !navigator.wakeLock?.request) return;
+  navigator.wakeLock.request('screen').then((lock) => {
+    screenLock = lock;
+    lock.addEventListener?.('release', () => {
+      if (screenLock === lock) screenLock = null;
+    });
+  }).catch(() => {
+    screenLock = null;
+  });
+}
+
+function releaseScreen() {
+  const lock = screenLock;
+  screenLock = null;
+  lock?.release?.().catch(() => {});
+}
+
+function followPlay() {
+  const voice = game.config.playMode === 'voice';
+  const hot = voice && !document.hidden && (game.status === 'playing' || game.status === 'frozen');
+  if (!hot) {
+    earToken = '';
+    if (ear.active()) ear.stop();
+    releaseScreen();
+    if (micState === 'listening') micState = 'off';
+    return;
+  }
+  const snap = game.snapshot();
+  const token = `${snap.epoch}:${snap.index}:${snap.spot?.phase ?? ''}`;
+  if (earToken && earToken !== token) ear.bump();
+  earToken = token;
 }
 
 function render(at) {
+  rendering = true;
+  followPlay();
   const snap = game.snapshot(at);
   sound.setEnabled(snap.config.sound);
   painter.paint(snap, game.words, extras());
+  rendering = false;
+}
+
+function beginRound(change) {
+  const at = performance.now();
+  if (game.config.playMode === 'voice' && !ear.supported()) {
+    micState = 'missing';
+    drain(at);
+    return;
+  }
+  sound.unlock();
+  change(at);
+  if (game.config.playMode === 'voice' && (game.status === 'playing' || game.status === 'frozen')) {
+    ear.start();
+    holdScreen();
+  }
+  drain(at);
 }
 
 function drain(at = performance.now()) {
@@ -137,14 +220,14 @@ function handleEvent(event) {
 
   if (event.type === 'miss') {
     sound.miss();
-    painter.pop(event.reason === 'wrong' ? 'Miss' : 'Slow', 'miss');
+    painter.pop(event.reason === 'timeout' ? 'Slow' : 'Miss', 'miss');
     const answer = event.answer || '?';
-    setText(
-      live,
-      event.reason === 'wrong'
-        ? `That key was ${event.pressed}. This letter is ${answer}.`
-        : `Time ran out. This letter is ${answer}.`,
-    );
+    setText(live, strikeSentence({
+      missReason: event.reason,
+      missedKey: event.pressed,
+      answer,
+      config: game.config,
+    }));
     return;
   }
 
@@ -257,18 +340,21 @@ function rememberScore(score) {
 }
 
 function onSpace() {
-  sound.unlock();
   const at = performance.now();
   if (game.acknowledgeRecall()) {
     drain(at);
     return;
   }
   if (game.recallLocked()) return;
-  if (game.status === 'idle' || game.status === 'finished') game.start(at);
-  else if (game.status === 'paused') game.resume(at);
-  else if (game.status === 'break') game.continueRound(at);
-  else if (game.status === 'playing') game.pause();
-  drain(at);
+  if (game.status === 'playing') {
+    sound.unlock();
+    game.pause();
+    drain(at);
+    return;
+  }
+  if (game.status === 'idle' || game.status === 'finished') beginRound((t) => game.start(t));
+  else if (game.status === 'paused') beginRound((t) => game.resume(t));
+  else if (game.status === 'break') beginRound((t) => game.continueRound(t));
 }
 
 function frame(t) {
@@ -307,31 +393,32 @@ must('toggle-keypad').addEventListener('click', () => {
 });
 
 must('idle-start').addEventListener('click', (event) => {
-  sound.unlock();
   event.currentTarget.blur();
-  game.start(performance.now());
-  drain();
+  beginRound((at) => game.start(at));
 });
 
 must('paused-resume').addEventListener('click', (event) => {
-  sound.unlock();
   event.currentTarget.blur();
-  game.resume(performance.now());
-  drain();
+  beginRound((at) => game.resume(at));
 });
 
 must('break-continue').addEventListener('click', (event) => {
-  sound.unlock();
   event.currentTarget.blur();
-  game.continueRound(performance.now());
-  drain();
+  beginRound((at) => game.continueRound(at));
 });
 
 must('done-again').addEventListener('click', (event) => {
-  sound.unlock();
   event.currentTarget.blur();
-  game.start(performance.now());
-  drain();
+  beginRound((at) => game.start(at));
+});
+
+must('arena').addEventListener('pointerdown', () => {
+  if (game.config.playMode !== 'voice') return;
+  if (game.status !== 'playing' && game.status !== 'frozen') return;
+  if (!ear.supported()) return;
+  sound.unlock();
+  ear.start();
+  holdScreen();
 });
 
 must('done-article').addEventListener('click', (event) => {
@@ -401,6 +488,7 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (event.repeat) return;
+  if (game.config.playMode === 'voice') return;
   if (typeof event.key === 'string' && event.key.length === 1) {
     sound.unlock();
     if (game.press(event.key, performance.now())) drain();

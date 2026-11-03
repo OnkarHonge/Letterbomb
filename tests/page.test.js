@@ -9,7 +9,10 @@ import {
   pauseRule,
   recallHeading,
   RECITAL_IDLE,
+  VOICE_IDLE,
+  micLine,
   recallPrompt,
+  strikeSentence,
   roundNote,
   targetHud,
   wordMarks,
@@ -129,6 +132,8 @@ describe('page and engine', () => {
     expect(wordWindowNote({ ...DEFAULT_CONFIG, openingMultiplier: 3 })).toBe(
       'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 1480 ms. A dash, an ellipsis, or a double space gives you 133 ms.',
     );
+    expect(wordWindowNote({ ...DEFAULT_CONFIG, playMode: 'voice' })).toContain('1880 ms');
+    expect(wordWindowNote({ ...DEFAULT_CONFIG, playMode: 'voice' })).toContain('so the phone can hear it');
     expect(range('cfg-round')).toMatchObject({
       min: LIMITS.roundSize[0],
       max: LIMITS.roundSize[1],
@@ -164,6 +169,10 @@ describe('page and engine', () => {
     expect(checkedPlay[1]).toBe(DEFAULT_CONFIG.playMode);
     expect(html).toContain('the rest come from memory');
     expect(html).toContain('id="idle-recital"');
+    expect(html).toContain('You say the first letter instead of typing it.');
+    expect(html).toContain(VOICE_IDLE);
+    expect(html).toContain('id="idle-voice"');
+    expect(html).toContain('id="mic-status"');
 
     const themes = [...html.matchAll(/data-theme="([^"]+)" aria-pressed="(true|false)"/g)];
     expect(themes.map((match) => match[1])).toEqual([...THEMES]);
@@ -183,6 +192,21 @@ describe('page and engine', () => {
     expect(pauseRule(true)).toBe(
       'That letter already counted. Resume moves on. Click a word to move the highlight.',
     );
+    expect(strikeSentence({ missReason: 'wrong', missedKey: 'B', answer: 'T' })).toBe(
+      'That key was B. This letter is T.',
+    );
+    expect(strikeSentence({
+      missReason: 'wrong',
+      missedKey: 'B',
+      answer: 'T',
+      config: { playMode: 'voice' },
+    })).toBe('Heard B. This letter is T.');
+    expect(strikeSentence({ missReason: 'unheard', answer: 'T' })).toBe(
+      'No letter came through. This letter is T.',
+    );
+    expect(micLine('missing')).toContain('Chrome or Safari');
+    expect(micLine('blocked')).toContain('microphone is blocked');
+    expect(micLine('listening')).toBe('Listening');
   });
 
   it('groups tune into play, speed, breaths, and the board', () => {
@@ -192,7 +216,7 @@ describe('page and engine', () => {
       'A pace sets speed, forgiveness, and how long a miss freezes. The pauses, the answer, and advance-on-hit stay as you set them.',
     );
     expect(html).toContain('id="cfg-look-field" hidden');
-    expect(html).toContain('Spot check stays off until you switch back to Words.');
+    expect(html).toContain('Spot check stays off until you switch back to Words or Speak.');
     expect(html).toContain('Question at the end');
     expect(html).toContain('Puts every control on this screen back to the start. The article stays.');
     expect(html).toContain('>Reset all<');
@@ -219,6 +243,11 @@ describe('page and engine', () => {
     const word = { original: 'Word' };
     const base = { word, isTarget: true, config: { showTargetHud: true }, answer: 'W' };
     expect(targetHud({ ...base, status: 'playing' })).toEqual({ label: 'First letter', value: 'W' });
+    expect(targetHud({
+      ...base,
+      status: 'playing',
+      config: { showTargetHud: true, playMode: 'voice' },
+    })).toEqual({ label: 'Say', value: 'W' });
     expect(targetHud({ ...base, status: 'playing', config: { showTargetHud: false } })).toEqual({
       label: 'First letter',
       value: '•',
