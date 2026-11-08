@@ -11,6 +11,14 @@ import {
   scrollWasTaken,
 } from './scroll.js';
 
+/** Which corner guides to draw. Recital and a quiet card draw neither. */
+export function cornerBoard({ playMode, showCornerLabels, showCornerGrid, active }) {
+  const words = playMode !== 'recital' && Boolean(active);
+  const labels = Boolean(words && showCornerLabels);
+  const grid = Boolean(words && showCornerGrid);
+  return { board: labels || grid, labels, grid };
+}
+
 export function missRule(freezeSec) {
   return freezeSec > 0
     ? 'Hits build a streak. A miss freezes the board, then you continue.'
@@ -307,6 +315,8 @@ export function createPainter() {
   const idleRecital = must('idle-recital');
   const idleAreas = must('idle-areas');
   const quadrantBoard = must('quadrant-board');
+  const quadrantGrid = must('quadrant-grid');
+  const quadrantLabels = must('quadrant-labels');
   const idleRound = must('idle-round');
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
@@ -896,7 +906,15 @@ export function createPainter() {
 
     const runActive = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
     const wordsOn = config.playMode !== 'recital';
-    quadrantBoard.hidden = !(wordsOn && (snap.status === 'playing' || extras?.drill?.on));
+    const guides = cornerBoard({
+      playMode: config.playMode,
+      showCornerLabels: config.showCornerLabels,
+      showCornerGrid: config.showCornerGrid,
+      active: snap.status === 'playing' || Boolean(extras?.drill?.on),
+    });
+    quadrantBoard.hidden = !guides.board;
+    quadrantGrid.hidden = !guides.grid;
+    quadrantLabels.hidden = !guides.labels;
     keypadDock.hidden = config.focusMode || !runActive || wordsOn;
     keypadBody.hidden = !config.showKeypad;
     setText(toggleKeypad, config.showKeypad ? 'Hide keys' : 'Show keys');

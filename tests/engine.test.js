@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONFIG, sanitizeConfig } from '../src/engine/config.js';
+import { DEFAULT_CONFIG, configForDevice, initialConfig, sanitizeConfig } from '../src/engine/config.js';
 import {
   LONG_WORD_LETTERS,
   PUNCTUATION_MARKS,
@@ -195,5 +195,48 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({}).endQuestion).toBe(true);
     expect(sanitizeConfig({ endQuestion: false }).endQuestion).toBe(false);
     expect(sanitizeConfig({ endQuestion: 'no' }).endQuestion).toBe(true);
+    expect(sanitizeConfig({}).showCornerLabels).toBe(false);
+    expect(sanitizeConfig({}).showCornerGrid).toBe(false);
+    expect(sanitizeConfig({ showCornerLabels: true, showCornerGrid: true })).toMatchObject({
+      showCornerLabels: true,
+      showCornerGrid: true,
+    });
+    expect(sanitizeConfig({ showCornerLabels: 'yes', showCornerGrid: 1 })).toMatchObject({
+      showCornerLabels: false,
+      showCornerGrid: false,
+    });
+  });
+});
+
+describe('corner guide defaults', () => {
+  it('starts both off, and both on for a touchscreen', () => {
+    expect(configForDevice(false)).toMatchObject({
+      showCornerLabels: false,
+      showCornerGrid: false,
+    });
+    expect(configForDevice(true)).toMatchObject({
+      ...DEFAULT_CONFIG,
+      showCornerLabels: true,
+      showCornerGrid: true,
+    });
+  });
+
+  it('keeps a saved off switch and fills a missing one from the device', () => {
+    expect(initialConfig({ touchscreen: true }).showCornerLabels).toBe(true);
+    expect(initialConfig({ touchscreen: false }).showCornerGrid).toBe(false);
+    const saved = initialConfig({
+      touchscreen: true,
+      saved: { wpm: 200, showCornerLabels: false },
+    });
+    expect(saved.wpm).toBe(200);
+    expect(saved.showCornerLabels).toBe(false);
+    expect(saved.showCornerGrid).toBe(true);
+    expect(initialConfig({ touchscreen: true, reducedMotion: true }).reducedMotion).toBe(true);
+    expect(initialConfig({ touchscreen: false, reducedMotion: true }).reducedMotion).toBe(true);
+    expect(initialConfig({
+      touchscreen: true,
+      saved: { reducedMotion: false },
+      reducedMotion: true,
+    }).reducedMotion).toBe(false);
   });
 });

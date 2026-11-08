@@ -1,4 +1,5 @@
-import { DEFAULT_CONFIG, PACE_PRESETS, matchingPace, pacePatch } from '../engine/config.js';
+import { configForDevice, PACE_PRESETS, matchingPace, pacePatch } from '../engine/config.js';
+import { hasTouchscreen } from './device.js';
 import { wordDeadlineMs } from '../engine/timing.js';
 import { must, setText } from './dom.js';
 
@@ -34,6 +35,9 @@ export function bindSettings(game, { onChange }) {
   const lookField = must('cfg-look-field');
   const spot = must('cfg-spot');
   const spotNote = must('cfg-spot-note');
+  const cornerLabels = must('cfg-corner-labels');
+  const cornerGrid = must('cfg-corner-grid');
+  const cornerNote = must('cfg-corner-note');
   const font = must('cfg-font');
   const fontVal = must('cfg-font-val');
   const windowNote = must('cfg-window');
@@ -96,6 +100,8 @@ export function bindSettings(game, { onChange }) {
       showTimeBar: bar.checked,
       sound: sound.checked,
       showKeypad: keypad.checked,
+      showCornerLabels: playMode === 'recital' ? game.config.showCornerLabels : cornerLabels.checked,
+      showCornerGrid: playMode === 'recital' ? game.config.showCornerGrid : cornerGrid.checked,
       focusMode: focus.checked,
       reducedMotion: motion.checked,
       spotCheck: playMode === 'recital' ? game.config.spotCheck : spot.checked,
@@ -112,11 +118,22 @@ export function bindSettings(game, { onChange }) {
     lookField.hidden = recital || !config.spotCheck;
     if (recital) spot.setAttribute('aria-describedby', 'cfg-spot-note');
     else spot.removeAttribute('aria-describedby');
+    cornerLabels.disabled = recital;
+    cornerGrid.disabled = recital;
+    cornerLabels.checked = recital ? false : config.showCornerLabels;
+    cornerGrid.checked = recital ? false : config.showCornerGrid;
+    cornerNote.hidden = !recital;
+    for (const input of [cornerLabels, cornerGrid]) {
+      if (recital) input.setAttribute('aria-describedby', 'cfg-corner-note');
+      else input.removeAttribute('aria-describedby');
+    }
   }
 
   function applyForm() {
     if (selectedPlay() === 'words' && game.config.playMode === 'recital') {
       spot.checked = game.config.spotCheck;
+      cornerLabels.checked = game.config.showCornerLabels;
+      cornerGrid.checked = game.config.showCornerGrid;
     }
     game.setConfig(readForm());
     paintLabels(game.config);
@@ -142,6 +159,8 @@ export function bindSettings(game, { onChange }) {
     bar.checked = config.showTimeBar;
     sound.checked = config.sound;
     keypad.checked = config.showKeypad;
+    cornerLabels.checked = config.showCornerLabels;
+    cornerGrid.checked = config.showCornerGrid;
     focus.checked = config.focusMode;
     motion.checked = config.reducedMotion;
     spot.checked = config.spotCheck;
@@ -156,7 +175,7 @@ export function bindSettings(game, { onChange }) {
   for (const input of [wpm, forgive, freeze, punct, opening, round, look, font]) {
     input.addEventListener('input', applyForm);
   }
-  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, endQuestion, ...viewRadios, ...playRadios]) {
+  for (const input of [filter, advance, target, bar, sound, keypad, focus, motion, spot, endQuestion, cornerLabels, cornerGrid, ...viewRadios, ...playRadios]) {
     input.addEventListener('change', applyForm);
   }
 
@@ -180,7 +199,7 @@ export function bindSettings(game, { onChange }) {
   }
 
   must('cfg-reset').addEventListener('click', () => {
-    game.setConfig({ ...DEFAULT_CONFIG });
+    game.setConfig(configForDevice(hasTouchscreen()));
     sync();
     onChange();
   });

@@ -275,6 +275,11 @@ h3 {
   z-index: 3;
   pointer-events: none;
 }
+#quadrant-grid,
+#quadrant-labels {
+  position: absolute;
+  inset: 0;
+}
 .quadrant-edge {
   position: absolute;
   background: var(--line);
