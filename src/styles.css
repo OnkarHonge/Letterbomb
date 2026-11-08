@@ -269,12 +269,83 @@ h3 {
   border-radius: 22px;
   background: var(--bg-arena);
 }
+#quadrant-board {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.quadrant-edge {
+  position: absolute;
+  background: var(--line);
+}
+.quadrant-edge.is-col-a,
+.quadrant-edge.is-col-b {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.quadrant-edge.is-col-a { left: 42%; }
+.quadrant-edge.is-col-b { left: 58%; }
+.quadrant-edge.is-row-a,
+.quadrant-edge.is-row-b {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.quadrant-edge.is-row-a { top: 42%; }
+.quadrant-edge.is-row-b { top: 58%; }
+.quadrant-label {
+  position: absolute;
+  z-index: 4;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-arena) 84%, transparent);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-align: center;
+}
+.quadrant-label.is-nw { top: 40px; left: 12px; }
+.quadrant-label.is-ne { top: 40px; right: 12px; }
+.quadrant-label.is-sw { bottom: 18px; left: 12px; }
+.quadrant-label.is-se { bottom: 18px; right: 12px; }
+
 .arena-top {
+  position: relative;
+  z-index: 5;
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: baseline;
 }
+#exit-full { display: none; flex: 0 0 auto; }
+body.is-reading-full .top,
+body.is-reading-full .hud,
+body.is-reading-full .keypad-dock { display: none; }
+body.is-reading-full #app {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+body.is-reading-full #arena,
+#arena:fullscreen,
+#arena:-webkit-full-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+body.is-reading-full #exit-full,
+#arena:fullscreen #exit-full,
+#arena:-webkit-full-screen #exit-full { display: inline-flex; }
 .arena-top p { color: var(--muted); font-size: 0.82rem; }
 #round-meta { color: var(--accent); font-weight: 800; white-space: nowrap; }
 
@@ -343,6 +414,40 @@ h3 {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+.drill {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  pointer-events: none;
+}
+.drill .btn { pointer-events: auto; }
+.drill-letter {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-num);
+  font-size: clamp(4.5rem, 22vw, 8rem);
+  font-weight: 800;
+  line-height: 0.9;
+}
+.drill-letter.is-miss { color: var(--miss); }
+#drill-kicker {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+}
+.drill-note {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--miss);
+  font-weight: 800;
 }
 .karaoke, .rsvp {
   /* 0px, not 0%: Safari treats a percentage basis as the content height
@@ -480,14 +585,18 @@ body.is-paused .word { cursor: pointer; }
   inset: 0;
   z-index: 2;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   padding: 16px;
   overflow: auto;
   background: var(--overlay);
 }
 .panel {
   width: min(32rem, 100%);
+  /* Centers a short card. A card taller than the reading area starts at the
+     top, so the title stays on screen and the rest can scroll into view. */
+  margin-block: auto;
+  flex: 0 0 auto;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 18px;

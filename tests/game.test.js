@@ -307,7 +307,7 @@ describe('game', () => {
     expect(game.snapshot().index).toBe(4);
   });
 
-  it('plays a milestone on the tenth hit', () => {
+  it('keeps the streak climbing through ten hits when no sentence ends', () => {
     const game = setup('Go '.repeat(10).trim());
     game.start(0);
     let time = 0;
@@ -319,7 +319,77 @@ describe('game', () => {
     expect(snap.score).toBe(1100);
     expect(snap.maxStreak).toBe(10);
     expect(game.status).toBe(STATUS.FINISHED);
-    expect(game.consumeEvents().some((event) => event.type === 'milestone')).toBe(true);
+    const events = game.consumeEvents();
+    expect(events.some((event) => event.type === 'milestone')).toBe(false);
+    const hits = events.filter((event) => event.type === 'hit');
+    expect(hits).toHaveLength(10);
+    expect(hits[9]).toMatchObject({ ascent: 10, streak: 10, sentenceEnd: false });
+  });
+
+  it.each(['.', '!', '?'])('chords on a word ending in %s and starts the next ascent at one', (mark) => {
+    const game = setup(`One${mark} Two`);
+    game.start(0);
+    game.consumeEvents();
+    game.press('o', 40);
+    const ended = game.consumeEvents();
+    const endHit = ended.findIndex((event) => event.type === 'hit');
+    expect(ended[endHit]).toMatchObject({ ascent: 1, streak: 1, sentenceEnd: true });
+    expect(ended[endHit + 1]).toMatchObject({ type: 'milestone', ascent: 1 });
+    game.press('t', 80);
+    const next = game.consumeEvents();
+    expect(next.some((event) => event.type === 'milestone')).toBe(false);
+    expect(next.find((event) => event.type === 'hit')).toMatchObject({
+      ascent: 1,
+      streak: 2,
+      sentenceEnd: false,
+    });
+    expect(game.snapshot().streak).toBe(2);
+    expect(game.snapshot().score).toBe(200);
+  });
+
+  it('keeps the streak and drops only the ascent after a sentence', () => {
+    const game = setup('One. Two three');
+    game.start(0);
+    game.consumeEvents();
+    game.press('o', 40);
+    game.press('t', 80);
+    game.press('t', 120);
+    const hits = game.consumeEvents().filter((event) => event.type === 'hit');
+    expect(hits.map((event) => event.ascent)).toEqual([1, 1, 2]);
+    expect(hits.map((event) => event.streak)).toEqual([1, 2, 3]);
+    expect(hits.map((event) => event.sentenceEnd)).toEqual([true, false, false]);
+    expect(game.snapshot().score).toBe(300);
+  });
+
+  it('does not chord on a comma', () => {
+    const game = setup('Go, now');
+    game.start(0);
+    game.consumeEvents();
+    pressLetters(game, ['g', 'n']);
+    const events = game.consumeEvents();
+    expect(events.some((event) => event.type === 'milestone')).toBe(false);
+    expect(events.filter((event) => event.type === 'hit').map((event) => event.ascent)).toEqual([1, 2]);
+  });
+
+  it('drops the ascent on a miss without a milestone', () => {
+    const game = setup('One two. Three');
+    game.start(0);
+    game.consumeEvents();
+    game.press('o', 40);
+    expect(game.press('x', 80)).toBe(true);
+    const missed = game.consumeEvents();
+    expect(missed.some((event) => event.type === 'milestone')).toBe(false);
+    expect(missed.find((event) => event.type === 'miss')).toMatchObject({
+      reason: 'wrong',
+      answer: 'T',
+      pressed: 'X',
+    });
+    game.press('t', 120);
+    expect(game.consumeEvents().find((event) => event.type === 'hit')).toMatchObject({
+      ascent: 1,
+      streak: 1,
+      sentenceEnd: false,
+    });
   });
 
   it('does not restart a run that is already moving', () => {
@@ -1348,5 +1418,86 @@ describe('recital', () => {
     game.start(0);
     expect(game.press('é', 20)).toBe(true);
     expect(game.snapshot(20)).toMatchObject({ recital: { phase: 'riff' }, score: 100 });
+  });
+});
+
+describe('quadrant taps', () => {
+  it('scores the corner that owns the first letter and still takes a key', () => {
+    const game = setup('Alpha Hotel');
+    game.start(0);
+    expect(game.pressArea('nw', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({ index: 1, score: 100, streak: 1 });
+    expect(game.press('h', 80)).toBe(true);
+    expect(game.status).toBe(STATUS.FINISHED);
+  });
+
+  it('misses the wrong corner and names that area', () => {
+    const game = setup('Alpha', { freezeSec: 1 });
+    game.start(0);
+    expect(game.pressArea('se', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({
+      status: STATUS.FROZEN,
+      misses: 1,
+      missedKey: 'T–Z',
+      answer: 'A',
+    });
+  });
+
+  it('scores the corner that owns a digit and names the number group on a miss', () => {
+    const game = setup('4 cats', { freezeSec: 1 });
+    game.start(0);
+    expect(game.pressArea('nw', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({
+      status: STATUS.FROZEN,
+      misses: 1,
+      missedKey: '0–2',
+      answer: '4',
+    });
+    const next = setup('4 cats');
+    next.start(0);
+    expect(next.pressArea('ne', 20)).toBe(true);
+    expect(next.snapshot(20)).toMatchObject({ index: 1, score: 100, streak: 1 });
+  });
+
+  it('answers a spot check by the marked letter’s corner', () => {
+    const game = setup('Word Beta', { spotCheck: true, spotLookMs: 200, freezeSec: 1 });
+    game.start(0);
+    expect(game.pressArea('se', 20)).toBe(false);
+    game.tick(200);
+    expect(game.pressArea('se', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({
+      score: 100,
+      spot: { phase: 'reveal' },
+      answer: 'W',
+    });
+  });
+
+  it('names the wrong corner on a spot check', () => {
+    const game = setup('Word', { spotCheck: true, spotLookMs: 200, freezeSec: 1 });
+    game.start(0);
+    game.tick(200);
+    expect(game.pressArea('nw', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({
+      status: STATUS.FROZEN,
+      misses: 1,
+      missedKey: 'A–G',
+      answer: 'W',
+      spot: { phase: 'answer' },
+    });
+  });
+
+  it('answers a marked digit by its corner', () => {
+    const game = setup('beta4', { spotCheck: true, spotLookMs: 200 }, () => 0.99);
+    game.start(0);
+    game.tick(200);
+    expect(game.pressArea('ne', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({ score: 100, answer: '4', spot: { phase: 'reveal' } });
+  });
+
+  it('does not take a corner during recital', () => {
+    const game = setup('Alpha Beta Golf Hotel', { playMode: 'recital' });
+    game.start(0);
+    expect(game.pressArea('nw', 20)).toBe(false);
+    expect(game.snapshot(20)).toMatchObject({ score: 0, recital: { phase: 'look' } });
   });
 });

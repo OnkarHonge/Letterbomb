@@ -1,3 +1,4 @@
+import { missLine } from '../engine/quadrant.js';
 import { cueChars, hiddenWordLabel, spotFace } from '../engine/spot.js';
 import { must, setText } from './dom.js';
 import {
@@ -35,6 +36,7 @@ export function pauseRule(responded, phase) {
 export const RECALL_QUESTION = 'Which word fills the blank?';
 export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
 export const RECITAL_IDLE = 'Recital is on. A phrase stays up to read. The first letter hides it, and the rest come from memory on a short fuse.';
+export const QUADRANT_IDLE = 'On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.';
 
 /** A wide space is named Pause. A dash stays visible and is still a gap. */
 export function wordMarks(word) {
@@ -303,10 +305,18 @@ export function createPainter() {
   const idleBest = must('idle-best');
   const idleSpot = must('idle-spot');
   const idleRecital = must('idle-recital');
+  const idleAreas = must('idle-areas');
+  const quadrantBoard = must('quadrant-board');
   const idleRound = must('idle-round');
   const idleMiss = must('idle-miss');
   const pauseCopy = must('pause-copy');
   const idleStart = must('idle-start');
+  const idleDrill = must('idle-drill');
+  const idleDrillNote = must('idle-drill-note');
+  const drillPanel = must('drill');
+  const drillLetter = must('drill-letter');
+  const drillNote = must('drill-note');
+  const drillTally = must('drill-tally');
   const breakTitle = must('break-title');
   const breakCopy = must('break-copy');
   const breakRest = must('break-rest');
@@ -706,9 +716,10 @@ export function createPainter() {
     }
     state.status = snap.status;
 
-    karaoke.hidden = config.viewMode !== 'karaoke';
-    rsvp.hidden = config.viewMode !== 'rsvp';
-    timer.hidden = !config.showTimeBar;
+    const drilling = Boolean(extras?.drill?.on);
+    karaoke.hidden = drilling || config.viewMode !== 'karaoke';
+    rsvp.hidden = drilling || config.viewMode !== 'rsvp';
+    timer.hidden = drilling || !config.showTimeBar;
     ensureWindow(snap, words);
     syncFace(snap, words);
     flushReveal();
@@ -748,10 +759,12 @@ export function createPainter() {
         : Math.min(snap.index + 1, snap.total);
     setText(
       articleMeta,
-      snap.total ? `${snap.articleLabel} · ${shown} / ${snap.total}` : 'No article loaded',
+      extras?.drill?.on
+        ? 'Corner drill'
+        : snap.total ? `${snap.articleLabel} · ${shown} / ${snap.total}` : 'No article loaded',
     );
 
-    if (config.roundSize > 0 && snap.total && snap.status !== 'finished') {
+    if (!extras?.drill?.on && config.roundSize > 0 && snap.total && snap.status !== 'finished') {
       roundMeta.hidden = false;
       setText(
         roundMeta,
@@ -765,10 +778,7 @@ export function createPainter() {
 
     strike.hidden = snap.status !== 'frozen';
     if (snap.status === 'frozen') {
-      const sentence = snap.missReason === 'wrong'
-        ? `That key was ${snap.missedKey}. This letter is ${snap.answer}.`
-        : `Time ran out. This letter is ${snap.answer}.`;
-      setText(strikeText, sentence);
+      setText(strikeText, missLine(snap.missReason, snap.missedKey, snap.answer));
       setText(strikeSub, `Moving on in ${Math.max(0, snap.freezeLeftMs / 1000).toFixed(1)} s`);
     }
 
@@ -781,7 +791,15 @@ export function createPainter() {
     setText(pauseCopy, pauseRule(snap.responded, pausePhase));
     setText(idleMiss, missRule(config.freezeSec));
     const showOverlay = snap.status === 'idle' || snap.status === 'break' || snap.status === 'finished';
-    overlay.hidden = !showOverlay;
+    overlay.hidden = drilling || !showOverlay;
+    drillPanel.hidden = !drilling;
+    drillLetter.classList.toggle('is-miss', extras?.drill?.mark === 'miss');
+    setText(drillLetter, extras?.drill?.letter || '');
+    setText(drillNote, extras?.drill?.note || '');
+    setText(
+      drillTally,
+      drilling ? `${extras.drill.hits} right · streak ${extras.drill.streak}` : '',
+    );
     panelIdle.hidden = snap.status !== 'idle';
     panelBreak.hidden = snap.status !== 'break';
     panelDone.hidden = snap.status !== 'finished';
@@ -789,16 +807,20 @@ export function createPainter() {
 
     setText(idleRound, roundNote(config.roundSize, config.endQuestion));
     const recitalOn = config.playMode === 'recital';
-    setText(idleTitle, recitalOn ? 'Read the phrase' : 'Press the first letter');
+    setText(idleTitle, recitalOn ? 'Read the phrase' : 'Tap the corner');
     setText(idleRead, recitalOn ? 'Read the highlighted phrase.' : 'Read the highlighted word.');
     setText(
       idlePress,
       recitalOn
         ? 'Press the first letter when you have it. The phrase hides, and the rest follow from memory.'
-        : 'Press its first letter before the bar runs out.',
+        : 'Tap its corner before the bar runs out.',
     );
     idleRecital.hidden = !recitalOn;
     setText(idleRecital, recitalOn ? RECITAL_IDLE : '');
+    idleAreas.hidden = recitalOn;
+    setText(idleAreas, recitalOn ? '' : QUADRANT_IDLE);
+    idleDrill.hidden = recitalOn;
+    idleDrillNote.hidden = recitalOn;
     idleSpot.hidden = recitalOn || !config.spotCheck;
     setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break'
@@ -873,7 +895,9 @@ export function createPainter() {
     }
 
     const runActive = snap.status === 'playing' || snap.status === 'paused' || snap.status === 'frozen';
-    keypadDock.hidden = config.focusMode || !runActive;
+    const wordsOn = config.playMode !== 'recital';
+    quadrantBoard.hidden = !(wordsOn && (snap.status === 'playing' || extras?.drill?.on));
+    keypadDock.hidden = config.focusMode || !runActive || wordsOn;
     keypadBody.hidden = !config.showKeypad;
     setText(toggleKeypad, config.showKeypad ? 'Hide keys' : 'Show keys');
     toggleKeypad.setAttribute('aria-expanded', String(config.showKeypad));

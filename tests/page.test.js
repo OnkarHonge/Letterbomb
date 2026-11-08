@@ -164,6 +164,21 @@ describe('page and engine', () => {
     expect(checkedPlay[1]).toBe(DEFAULT_CONFIG.playMode);
     expect(html).toContain('the rest come from memory');
     expect(html).toContain('id="idle-recital"');
+    expect(html).toContain('id="quadrant-board"');
+    expect(html).toContain('id="idle-areas"');
+    expect(html).toContain('Top left is A–G and 0–2');
+    expect(html).toContain('T–Z and 7–9');
+    expect(html).toContain('A–G<br>0–2');
+    expect(html).toContain('tap the corner for its group');
+    expect(html).toContain('id="enter-full"');
+    expect(html).toContain('id="exit-full"');
+    expect(html).toContain('id="idle-start" class="btn btn-primary btn-large btn-block"');
+    expect(html).toContain('id="idle-drill" class="btn btn-block"');
+    expect(html).toContain('Drill corners');
+    expect(decl(rule('.overlay'), 'flex-direction')).toBe('column');
+    expect(decl(rule('.panel'), 'margin-block')).toBe('auto');
+    expect(html).toContain('id="drill-letter"');
+    expect(html).toContain('It stays until you tap its corner.');
 
     const themes = [...html.matchAll(/data-theme="([^"]+)" aria-pressed="(true|false)"/g)];
     expect(themes.map((match) => match[1])).toEqual([...THEMES]);
@@ -303,6 +318,30 @@ describe('gap beat layout', () => {
     expect(decl(gap, 'white-space')).toBe('pre');
     expect(decl(gap, 'min-width')).toBe('0.7em');
     expect(decl(rule('.word.is-gap'), 'flex-shrink')).toBe('0');
+  });
+});
+
+describe('reading full screen', () => {
+  it('hides the rest of the page and keeps Exit inside the card', () => {
+    expect(decl(rule('#exit-full'), 'display')).toBe('none');
+    const hidden = rule(
+      'body.is-reading-full .top,\nbody.is-reading-full .hud,\nbody.is-reading-full .keypad-dock',
+    );
+    expect(decl(hidden, 'display')).toBe('none');
+    const arena = rule('body.is-reading-full #arena,\n#arena:fullscreen,\n#arena:-webkit-full-screen');
+    expect(decl(arena, 'position')).toBe('fixed');
+    expect(decl(arena, 'inset')).toBe('0');
+    const exit = rule(
+      'body.is-reading-full #exit-full,\n#arena:fullscreen #exit-full,\n#arena:-webkit-full-screen #exit-full',
+    );
+    expect(decl(exit, 'display')).toBe('inline-flex');
+  });
+});
+
+describe('corner drill layout', () => {
+  it('lets a corner tap through and keeps Stop drill clickable', () => {
+    expect(decl(rule('.drill'), 'pointer-events')).toBe('none');
+    expect(decl(rule('.drill .btn'), 'pointer-events')).toBe('auto');
   });
 });
 
