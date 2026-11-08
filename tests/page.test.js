@@ -172,8 +172,11 @@ describe('page and engine', () => {
     expect(html).toContain('tap the corner for its group');
     expect(html).toContain('id="enter-full"');
     expect(html).toContain('id="exit-full"');
-    expect(html).toContain('id="idle-drill"');
+    expect(html).toContain('id="idle-start" class="btn btn-primary btn-large btn-block"');
+    expect(html).toContain('id="idle-drill" class="btn btn-block"');
     expect(html).toContain('Drill corners');
+    expect(decl(rule('.overlay'), 'flex-direction')).toBe('column');
+    expect(decl(rule('.panel'), 'margin-block')).toBe('auto');
     expect(html).toContain('id="drill-letter"');
     expect(html).toContain('It stays until you tap its corner.');
 
