@@ -14,6 +14,7 @@ import {
   targetHud,
   wordMarks,
 } from '../src/ui/paint.js';
+import { historyHeading, historyTitle } from '../src/ui/library.js';
 import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
@@ -294,6 +295,34 @@ describe('page and engine', () => {
       gap: false,
       label: '',
     });
+  });
+});
+
+describe('articles panel', () => {
+  it('asks for a text before the sync phrase', () => {
+    const panel = html.slice(html.indexOf('id="modal-library"'), html.indexOf('id="modal-stats"'));
+    const order = ['preset-list', 'synced-title', 'article-input', 'load-article', 'toggle-phrase', 'shelf-phrase'];
+    let at = -1;
+    for (const id of order) {
+      const next = panel.indexOf(id);
+      expect(next, id).toBeGreaterThan(at);
+      at = next;
+    }
+    expect(panel).toContain('Pick a text. Loading it stops this run.');
+    expect(panel).not.toContain('History keeps the 24');
+  });
+
+  it('names history from the text and mentions the cap only near it', () => {
+    expect(historyTitle('Beta article is the one still shared.')).toBe('Beta article is the one still shared.');
+    const titled = historyTitle(`${'Alpha '.repeat(20)}end.`);
+    expect(titled.startsWith('Alpha')).toBe(true);
+    expect(titled.endsWith('…')).toBe(true);
+    expect(titled).not.toContain('Custom article');
+    expect(historyHeading(3)).toBe('History · 3');
+    expect(historyHeading(19)).toBe('History · 19');
+    expect(historyHeading(20)).toBe('History · 20. 4 left before the oldest drops.');
+    expect(historyHeading(23)).toBe('History · 23. 1 left before the oldest drops.');
+    expect(historyHeading(24)).toBe('History · 24. Adding one drops the oldest.');
   });
 });
 

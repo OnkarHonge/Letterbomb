@@ -323,28 +323,33 @@
       <div class="modal-head">
         <div>
           <h2 id="library-title">Articles</h2>
-          <p class="field-help">Pick a text or paste your own. Loading it stops the current run. Each article you load joins History. The same sync phrase shares that history across your devices. History keeps the 24 most recent articles. Remove drops one from every device that uses the phrase. Loading that text again puts it back.</p>
+          <p class="field-help">Pick a text. Loading it stops this run.</p>
         </div>
         <button type="button" class="btn js-close">Close</button>
       </div>
-      <label class="field">
-        <span class="field-top"><span>Sync phrase</span></span>
-        <input id="shelf-phrase" type="password" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Same phrase on every device">
-      </label>
-      <p class="field-help">At least 8 characters. History on this device is shared when the phrase matches.</p>
-      <div class="btn-row">
-        <button type="button" id="save-phrase" class="btn">Save phrase</button>
-      </div>
       <div id="preset-list" class="preset-grid"></div>
       <h3 id="synced-title" class="shelf-title" hidden>History</h3>
+      <p id="history-note" class="history-note" hidden></p>
       <div id="synced-list" class="preset-grid" hidden></div>
       <label class="field">
         <span class="field-top"><span>Paste a long article</span><b id="article-count">0 words</b></span>
         <textarea id="article-input" rows="8" placeholder="Paste an article, a chapter, or a few paragraphs."></textarea>
       </label>
-      <p id="library-note" class="field-help"></p>
+      <p id="library-note" class="history-note" hidden></p>
       <div class="btn-row modal-actions">
         <button type="button" id="load-article" class="btn btn-primary">Load into game</button>
+      </div>
+      <label class="field">
+        <span class="field-top">
+          <span>Sync phrase</span>
+          <button type="button" id="toggle-phrase" class="btn" aria-pressed="false">Show</button>
+        </span>
+        <input id="shelf-phrase" type="password" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Same phrase on every device">
+      </label>
+      <p class="field-help">At least 8 characters. The same phrase shares History.</p>
+      <p id="phrase-note" class="history-note" hidden></p>
+      <div class="btn-row">
+        <button type="button" id="save-phrase" class="btn">Save phrase</button>
       </div>
     </div>
   </div>

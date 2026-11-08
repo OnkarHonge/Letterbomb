@@ -221,9 +221,9 @@ function scheduleSave() {
 function persist() {
   window.clearTimeout(saveTimer);
   const result = writeSave({ config: game.config, best, article });
-  if (!result.ok) library.note('Could not save in this browser.');
+  if (!result.ok) library.note('Could not save in this browser.', { failed: true });
   else if (result.skippedArticle) {
-    library.note('This article is too long to store. It stays loaded until you refresh.');
+    library.note('This article is too long to store. It stays loaded until you refresh.', { failed: true });
   }
 }
 
@@ -266,7 +266,7 @@ function closeModals() {
 function loadArticle(next) {
   const text = String(next.text || '').trim();
   if (!countWords(text)) {
-    library.note('That text has no readable words.');
+    library.note('That text has no readable words.', { failed: true });
     return;
   }
   articlePicked = true;
@@ -282,6 +282,7 @@ function loadArticle(next) {
   library.setText(article.text);
   library.markActive(article.id, articleKey(article.text));
   library.setSynced(visibleHistory());
+  dropUndo();
   library.note('');
   closeModals();
   scheduleSave();
@@ -332,29 +333,84 @@ function removalNote(result) {
   return 'Removed on this device. Other devices could not be reached.';
 }
 
+let pendingUndo = null;
+
+function dropUndo() {
+  pendingUndo = null;
+  library.setHistoryNote('');
+}
+
 async function removeArticle(item) {
   const deletedAt = Date.now();
+  const snapshot = { ...item, deletedAt };
+  pendingUndo = snapshot;
   forgetLocally(item.text, deletedAt);
   library.setSynced(visibleHistory());
+  library.setHistoryNote('Removed from History.', { onUndo: undoRemove });
   await enqueueShelf(async () => {
     const result = await deleteSharedArticle(item, { deletedAt });
     library.setSynced(visibleHistory());
-    if (!result.skipped) library.note(removalNote(result));
+    if (pendingUndo !== snapshot) return;
+    if (result.skipped) {
+      pendingUndo = null;
+      library.setHistoryNote('');
+      return;
+    }
+    library.setHistoryNote(removalNote(result), {
+      failed: !result.ok,
+      onUndo: undoRemove,
+    });
+  });
+}
+
+async function undoRemove() {
+  const snapshot = pendingUndo;
+  if (!snapshot) return;
+  pendingUndo = null;
+  const restored = {
+    id: snapshot.id || 'custom',
+    label: snapshot.label || 'Custom article',
+    text: snapshot.text,
+    savedAt: Date.now(),
+  };
+  rememberHistory(restored);
+  library.setSynced(visibleHistory());
+  library.setHistoryNote('Back in History.');
+  await enqueueShelf(async () => {
+    let result = await publishArticle(restored);
+    if (result.blocked) {
+      restored.savedAt = Date.now() + 5000;
+      rememberHistory(restored);
+      result = await publishArticle(restored);
+    }
+    library.setSynced(visibleHistory());
+    if (result.blocked) {
+      library.setHistoryNote('Back on this device. Other devices still have the removal.', { failed: true });
+      return;
+    }
+    if (result.ok) {
+      writeShelfCache(result.articles);
+      return;
+    }
+    if (result.reason === 'missing' || result.reason === 'unconfigured') return;
+    library.setHistoryNote(shelfNote(result.reason), { failed: true });
   });
 }
 
 function applyPhrase(raw) {
   const trimmed = String(raw || '').trim();
   if (!trimmed) {
+    dropUndo();
     clearPhrase();
     library.setSynced(visibleHistory());
-    library.note('Sync phrase removed. History on this device stays here.');
+    library.setPhraseNote('Sync phrase removed. History on this device stays here.');
     return;
   }
   if (!writePhrase(trimmed)) {
-    library.note('Use at least 8 characters for the sync phrase.');
+    library.setPhraseNote('Use at least 8 characters for the sync phrase.', { failed: true });
     return;
   }
+  dropUndo();
   library.setPhrase(loadPhrase());
   void syncFromShelf({ tell: true });
 }
@@ -365,7 +421,10 @@ async function shareArticle() {
     const result = await publishArticle(current);
     if (current !== article) return;
     if (!result.ok) {
-      library.note(shelfNote(result.reason));
+      if (!pendingUndo) {
+        const failed = result.reason !== 'missing' && result.reason !== 'unconfigured';
+        library.setHistoryNote(shelfNote(result.reason), { failed });
+      }
       return;
     }
     writeShelfCache(result.articles);
@@ -377,12 +436,12 @@ async function syncFromShelf({ tell = false } = {}) {
   try {
     await enqueueShelf(async () => {
       if (!loadPhrase()) {
-        if (tell) library.note('Add a sync phrase to share History.');
+        if (tell) library.setPhraseNote('Add a sync phrase to share History.', { failed: true });
         return;
       }
       const pulled = await pullShelf();
       if (!pulled.ok) {
-        if (tell) library.note(shelfNote(pulled.reason));
+        if (tell) library.setPhraseNote(shelfNote(pulled.reason), { failed: true });
         return;
       }
       applyTombstones(pulled.tombstones);
@@ -393,7 +452,7 @@ async function syncFromShelf({ tell = false } = {}) {
         const removed = await deleteSharedArticle(item, { deletedAt: tomb?.deletedAt });
         if (removed.skipped) continue;
         if (!removed.ok) {
-          if (tell) library.note(removalNote(removed));
+          if (tell && !pendingUndo) library.setHistoryNote(removalNote(removed), { failed: true });
           break;
         }
         articles = removed.articles;
@@ -428,7 +487,7 @@ async function syncFromShelf({ tell = false } = {}) {
         }
         if (!published.ok) {
           publishFailed = true;
-          if (tell) library.note(shelfNote(published.reason));
+          if (tell && !pendingUndo) library.setHistoryNote(shelfNote(published.reason), { failed: true });
           break;
         }
         articles = published.articles;
@@ -444,7 +503,7 @@ async function syncFromShelf({ tell = false } = {}) {
         modalOpen: modalOpen(),
       });
       if (!newest) {
-        if (tell) library.note('Sync phrase saved on this device.');
+        if (tell) library.setPhraseNote('Sync phrase saved on this device.');
         return;
       }
       loadArticle({
