@@ -166,7 +166,9 @@ describe('page and engine', () => {
     expect(html).toContain('id="idle-recital"');
     expect(html).toContain('id="quadrant-board"');
     expect(html).toContain('id="idle-areas"');
-    expect(html).toContain('Top left is A–G');
+    expect(html).toContain('Top left is A–G and 0–2');
+    expect(html).toContain('T–Z and 7–9');
+    expect(html).toContain('A–G<br>0–2');
     expect(html).toContain('tap the corner for its group');
     expect(html).toContain('id="enter-full"');
     expect(html).toContain('id="exit-full"');

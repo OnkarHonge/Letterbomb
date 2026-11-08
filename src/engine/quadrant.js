@@ -3,21 +3,40 @@ import { normalizeKey } from './parseText.js';
 /** Share of the reading area kept as a dead cross between the four taps. */
 export const QUADRANT_GUTTER = 0.16;
 
-const ZONE_NAME = {
-  nw: 'A–G',
-  ne: 'H–M',
-  sw: 'N–S',
-  se: 'T–Z',
+const ZONES = {
+  nw: { letters: 'A–G', digits: '0–2' },
+  ne: { letters: 'H–M', digits: '3–4' },
+  sw: { letters: 'N–S', digits: '5–6' },
+  se: { letters: 'T–Z', digits: '7–9' },
 };
 
+const AREA_NAMES = new Set(Object.values(ZONES).flatMap((group) => [group.letters, group.digits]));
+
 export function zoneName(zone) {
-  return ZONE_NAME[zone] ?? null;
+  return ZONES[zone]?.letters ?? null;
 }
 
-/** The corner that owns this letter. Digits and anything else have none. */
+/** The range named in a miss. A digit names its number group. A letter names its letter group. */
+export function areaName(zone, key) {
+  const group = ZONES[zone];
+  if (!group) return null;
+  const folded = normalizeKey(key);
+  if (folded >= '0' && folded <= '9') return group.digits;
+  return group.letters;
+}
+
+/** The corner that owns this letter or digit. Anything else has none. */
 export function zoneForKey(raw) {
   const key = normalizeKey(raw);
-  if (!key || key < 'A' || key > 'Z') return null;
+  if (!key) return null;
+  if (key >= '0' && key <= '9') {
+    const index = key.charCodeAt(0) - 48;
+    if (index <= 2) return 'nw';
+    if (index <= 4) return 'ne';
+    if (index <= 6) return 'sw';
+    return 'se';
+  }
+  if (key < 'A' || key > 'Z') return null;
   const index = key.charCodeAt(0) - 65;
   if (index <= 6) return 'nw';
   if (index <= 12) return 'ne';
@@ -50,7 +69,7 @@ export function zoneAt(x, y, width, height, gutter = QUADRANT_GUTTER) {
 export function missLine(reason, pressed, answer) {
   const letter = answer || '?';
   if (reason === 'wrong') {
-    if (Object.values(ZONE_NAME).includes(pressed)) {
+    if (AREA_NAMES.has(pressed)) {
       return `That area was ${pressed}. This letter is ${letter}.`;
     }
     return `That key was ${pressed || '?'}. This letter is ${letter}.`;

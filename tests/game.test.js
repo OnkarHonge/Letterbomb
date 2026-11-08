@@ -1443,13 +1443,20 @@ describe('quadrant taps', () => {
     });
   });
 
-  it('leaves a tap on a digit word unanswered', () => {
-    const game = setup('4 cats');
+  it('scores the corner that owns a digit and names the number group on a miss', () => {
+    const game = setup('4 cats', { freezeSec: 1 });
     game.start(0);
-    expect(game.pressArea('nw', 20)).toBe(false);
-    expect(game.snapshot(20)).toMatchObject({ index: 0, misses: 0, score: 0 });
-    expect(game.press('4', 30)).toBe(true);
-    expect(game.snapshot(30).index).toBe(1);
+    expect(game.pressArea('nw', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({
+      status: STATUS.FROZEN,
+      misses: 1,
+      missedKey: '0–2',
+      answer: '4',
+    });
+    const next = setup('4 cats');
+    next.start(0);
+    expect(next.pressArea('ne', 20)).toBe(true);
+    expect(next.snapshot(20)).toMatchObject({ index: 1, score: 100, streak: 1 });
   });
 
   it('answers a spot check by the marked letter’s corner', () => {
@@ -1477,6 +1484,14 @@ describe('quadrant taps', () => {
       answer: 'W',
       spot: { phase: 'answer' },
     });
+  });
+
+  it('answers a marked digit by its corner', () => {
+    const game = setup('beta4', { spotCheck: true, spotLookMs: 200 }, () => 0.99);
+    game.start(0);
+    game.tick(200);
+    expect(game.pressArea('ne', 220)).toBe(true);
+    expect(game.snapshot(220)).toMatchObject({ score: 100, answer: '4', spot: { phase: 'reveal' } });
   });
 
   it('does not take a corner during recital', () => {

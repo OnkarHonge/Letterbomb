@@ -305,6 +305,8 @@ h3 {
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-align: center;
 }
 .quadrant-label.is-nw { top: 40px; left: 12px; }
 .quadrant-label.is-ne { top: 40px; right: 12px; }

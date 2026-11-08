@@ -36,7 +36,7 @@ export function pauseRule(responded, phase) {
 export const RECALL_QUESTION = 'Which word fills the blank?';
 export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays up, then turns into blocks. Press the marked block.';
 export const RECITAL_IDLE = 'Recital is on. A phrase stays up to read. The first letter hides it, and the rest come from memory on a short fuse.';
-export const QUADRANT_IDLE = 'On a phone, tap a corner of the reading area. Top left is A–G, top right is H–M, bottom left is N–S, and bottom right is T–Z. The cross in the middle does nothing. A keyboard letter still counts.';
+export const QUADRANT_IDLE = 'On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.';
 
 /** A wide space is named Pause. A dash stays visible and is still a gap. */
 export function wordMarks(word) {

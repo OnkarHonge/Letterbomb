@@ -2,7 +2,7 @@ import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, isTerminator, normalizeKey, parseText } from './parseText.js';
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
-import { zoneForKey, zoneName } from './quadrant.js';
+import { areaName, zoneForKey, zoneName } from './quadrant.js';
 import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
 import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
 import { wordDeadlineMs } from './timing.js';
@@ -570,7 +570,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (!wanted) return false;
     lastPressAt = at;
     if (zone === wanted) hit(at);
-    else miss('wrong', at, name);
+    else miss('wrong', at, areaName(zone, expected));
     return true;
   }
 

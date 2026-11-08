@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missLine, zoneAt, zoneForKey, zoneName } from '../src/engine/quadrant.js';
+import { areaName, missLine, zoneAt, zoneForKey, zoneName } from '../src/engine/quadrant.js';
 
 describe('quadrant groups', () => {
   it('splits the alphabet into the four corners', () => {
@@ -16,10 +16,20 @@ describe('quadrant groups', () => {
     expect(zoneName('se')).toBe('T–Z');
   });
 
-  it('gives a digit no corner', () => {
-    expect(zoneForKey('4')).toBeNull();
+  it('splits the digits into the four corners', () => {
+    expect(zoneForKey('0')).toBe('nw');
+    expect(zoneForKey('2')).toBe('nw');
+    expect(zoneForKey('3')).toBe('ne');
+    expect(zoneForKey('4')).toBe('ne');
+    expect(zoneForKey('5')).toBe('sw');
+    expect(zoneForKey('6')).toBe('sw');
+    expect(zoneForKey('7')).toBe('se');
+    expect(zoneForKey('9')).toBe('se');
     expect(zoneForKey('')).toBeNull();
     expect(zoneForKey(null)).toBeNull();
+    expect(areaName('nw', '1')).toBe('0–2');
+    expect(areaName('se', 'W')).toBe('T–Z');
+    expect(zoneName('ne')).toBe('H–M');
   });
 
   it('ignores the middle cross and points outside the box', () => {
@@ -40,6 +50,7 @@ describe('quadrant groups', () => {
 
   it('names a wrong corner and keeps a wrong key', () => {
     expect(missLine('wrong', 'T–Z', 'A')).toBe('That area was T–Z. This letter is A.');
+    expect(missLine('wrong', '0–2', '4')).toBe('That area was 0–2. This letter is 4.');
     expect(missLine('wrong', 'B', 'T')).toBe('That key was B. This letter is T.');
     expect(missLine('timeout', null, 'A')).toBe('Time ran out. This letter is A.');
   });
