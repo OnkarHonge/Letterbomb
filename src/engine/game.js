@@ -2,6 +2,7 @@ import { sanitizeConfig, DEFAULT_CONFIG } from './config.js';
 import { applyFilter, isTerminator, normalizeKey, parseText } from './parseText.js';
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
+import { areaName, zoneForKey, zoneName } from './quadrant.js';
 import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
 import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
 import { wordDeadlineMs } from './timing.js';
@@ -45,6 +46,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let epoch = 0;
   let score = 0;
   let streak = 0;
+  let ascent = 0;
   let maxStreak = 0;
   let hits = 0;
   let misses = 0;
@@ -63,6 +65,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function resetStats() {
     score = 0;
     streak = 0;
+    ascent = 0;
     maxStreak = 0;
     hits = 0;
     misses = 0;
@@ -243,13 +246,18 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       : Math.max(0, Math.round(at - wordStartedAt));
     streak += 1;
     if (streak > maxStreak) maxStreak = streak;
+    ascent += 1;
     hits += 1;
     reactionTimes.push(reaction);
     const points = pointsForHit(streak);
     score += points;
     responded = true;
-    emit({ type: 'hit', points, reaction, streak, score, maxStreak });
-    if (streak % 10 === 0) emit({ type: 'milestone', streak });
+    const sentenceEnd = isTerminator(words[index]?.original);
+    emit({ type: 'hit', points, reaction, streak, score, maxStreak, ascent, sentenceEnd });
+    if (sentenceEnd) {
+      emit({ type: 'milestone', ascent });
+      ascent = 0;
+    }
     if (spotPhase === 'answer') {
       spotPhase = 'reveal';
       wordStartedAt = at;
@@ -263,6 +271,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function miss(reason, at, pressed) {
     misses += 1;
     streak = 0;
+    ascent = 0;
     responded = true;
     missReason = reason;
     missedKey = pressed;
@@ -547,6 +556,24 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     return true;
   }
 
+  function pressArea(zone, at = now()) {
+    if (status !== STATUS.PLAYING || recital) return false;
+    const name = zoneName(zone);
+    if (!name) return false;
+    const word = words[index];
+    if (at - lastPressAt < INPUT_LOCK_MS) return false;
+    if (!word?.isTarget || responded) return false;
+    if (spotPhase === 'look' || spotPhase === 'reveal') return false;
+    if (at - wordStartedAt >= deadlineMs) return false;
+    const expected = spotPhase === 'answer' ? cueFor(word)?.key : word.targetChar;
+    const wanted = zoneForKey(expected);
+    if (!wanted) return false;
+    lastPressAt = at;
+    if (zone === wanted) hit(at);
+    else miss('wrong', at, areaName(zone, expected));
+    return true;
+  }
+
   function tick(at = now()) {
     if (held) return;
     if (!words.length) return;
@@ -696,6 +723,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     acknowledgeRecall,
     recallLocked,
     press,
+    pressArea,
     tick,
     snapshot,
     consumeEvents() {

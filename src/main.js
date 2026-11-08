@@ -6,7 +6,9 @@
  */
 import { createSound } from './audio/sound.js';
 import { PRESETS } from './data/presets.js';
+import { createDrill } from './engine/drill.js';
 import { createGame } from './engine/game.js';
+import { missLine, zoneAt } from './engine/quadrant.js';
 import { countWords } from './engine/parseText.js';
 import { TEXT_LIMIT, loadSave, writeSave } from './storage.js';
 import {
@@ -93,6 +95,7 @@ buildKeys('ABCDEFGHIJKLMNOPQRSTUVWXYZ', must('keys-letters'));
 buildKeys('0123456789', must('keys-digits'));
 
 const painter = createPainter();
+const drill = createDrill();
 const settings = bindSettings(game, { onChange: scheduleSave });
 const library = bindLibrary({ onLoad: loadArticle, onPhrase: applyPhrase, onDelete: removeArticle });
 library.setText(article.text);
@@ -112,7 +115,7 @@ function extras() {
   const notes = [];
   if (records.streak) notes.push('New best streak');
   if (records.score) notes.push('New best score');
-  return { best, recordNote: notes.join(' · ') };
+  return { best, recordNote: notes.join(' · '), drill: drill.snapshot() };
 }
 
 function render(at) {
@@ -128,7 +131,7 @@ function drain(at = performance.now()) {
 
 function handleEvent(event) {
   if (event.type === 'hit') {
-    if (event.streak % 10 !== 0) sound.hit(event.streak);
+    if (!event.sentenceEnd) sound.hit(event.ascent);
     painter.pop(`+${event.points}`, 'hit');
     rememberScore(event.score);
     if (event.maxStreak > best.streak) {
@@ -164,7 +167,7 @@ function handleEvent(event) {
   }
 
   if (event.type === 'milestone') {
-    sound.milestone();
+    sound.milestone(event.ascent);
     return;
   }
 
@@ -172,12 +175,7 @@ function handleEvent(event) {
     sound.miss();
     painter.pop(event.reason === 'wrong' ? 'Miss' : 'Slow', 'miss');
     const answer = event.answer || '?';
-    setText(
-      live,
-      event.reason === 'wrong'
-        ? `That key was ${event.pressed}. This letter is ${answer}.`
-        : `Time ran out. This letter is ${answer}.`,
-    );
+    setText(live, missLine(event.reason, event.pressed, answer));
     return;
   }
 
@@ -526,9 +524,53 @@ function rememberScore(score) {
   scheduleSave();
 }
 
+function readingFullNode() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+let readingFallback = false;
+
+function enterReadingFull() {
+  if (modalOpen()) closeModals();
+  readingFallback = true;
+  document.body.classList.add('is-reading-full');
+  const arena = must('arena');
+  const request = arena.requestFullscreen?.bind(arena);
+  const legacy = arena.webkitRequestFullscreen?.bind(arena);
+  try {
+    if (request) Promise.resolve(request({ navigationUI: 'hide' })).catch(() => {});
+    else if (legacy) Promise.resolve(legacy()).catch(() => {});
+  } catch {
+    // The reading card already fills the screen. Some browsers refuse the system call.
+  }
+}
+
+function exitReadingFull() {
+  readingFallback = false;
+  const exit = document.exitFullscreen?.bind(document) || document.webkitExitFullscreen?.bind(document);
+  if (readingFullNode() && exit) Promise.resolve(exit()).catch(() => {});
+  document.body.classList.remove('is-reading-full');
+}
+
+function onFullscreenChange() {
+  const arena = document.getElementById('arena');
+  if (arena && readingFullNode() === arena) {
+    readingFallback = false;
+    document.body.classList.add('is-reading-full');
+    return;
+  }
+  if (readingFallback) return;
+  document.body.classList.remove('is-reading-full');
+}
+
 function onSpace() {
   sound.unlock();
   const at = performance.now();
+  if (drill.snapshot().on) {
+    drill.stop();
+    drain(at);
+    return;
+  }
   if (game.acknowledgeRecall()) {
     drain(at);
     return;
@@ -626,6 +668,52 @@ must('overlay').addEventListener('click', (event) => {
   }
 });
 
+must('enter-full').addEventListener('click', () => {
+  enterReadingFull();
+});
+
+must('exit-full').addEventListener('click', () => {
+  exitReadingFull();
+});
+
+must('idle-drill').addEventListener('click', (event) => {
+  event.currentTarget.blur();
+  sound.unlock();
+  drill.start();
+  drain();
+});
+
+must('drill-stop').addEventListener('click', (event) => {
+  event.currentTarget.blur();
+  drill.stop();
+  drain();
+});
+
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+must('arena').addEventListener('pointerdown', (event) => {
+  if (event.button > 0) return;
+  if (event.target.closest('button, a, input, textarea, select, label')) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const zone = zoneAt(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
+  if (!zone) return;
+  if (drill.snapshot().on) {
+    event.preventDefault();
+    sound.unlock();
+    const result = drill.answer(zone);
+    if (!result) return;
+    if (result.hit) sound.hit(1);
+    else sound.miss();
+    drain();
+    return;
+  }
+  if (game.config.playMode !== 'words' || game.status !== 'playing') return;
+  event.preventDefault();
+  sound.unlock();
+  if (game.pressArea(zone, performance.now())) drain();
+});
+
 must('karaoke').addEventListener('click', (event) => {
   const word = event.target.closest('[data-i]');
   if (!word) return;
@@ -644,6 +732,11 @@ for (const modal of modals) {
 
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
+    if (document.body.classList.contains('is-reading-full')) {
+      event.preventDefault();
+      exitReadingFull();
+      return;
+    }
     if (modalOpen()) {
       event.preventDefault();
       closeModals();
@@ -671,6 +764,7 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (event.repeat) return;
+  if (drill.snapshot().on) return;
   if (typeof event.key === 'string' && event.key.length === 1) {
     sound.unlock();
     if (game.press(event.key, performance.now())) drain();
