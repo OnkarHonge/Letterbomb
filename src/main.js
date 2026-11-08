@@ -5,11 +5,13 @@
  */
 import { createSound } from './audio/sound.js';
 import { PRESETS } from './data/presets.js';
+import { initialConfig } from './engine/config.js';
 import { createDrill } from './engine/drill.js';
 import { createGame } from './engine/game.js';
 import { missLine, zoneAt } from './engine/quadrant.js';
 import { countWords } from './engine/parseText.js';
 import { loadSave, writeSave } from './storage.js';
+import { hasTouchscreen } from './ui/device.js';
 import { must, setText } from './ui/dom.js';
 import { bindLibrary } from './ui/library.js';
 import { createPainter, recallPrompt } from './ui/paint.js';
@@ -19,10 +21,11 @@ const saved = loadSave();
 const game = createGame();
 const sound = createSound();
 
-if (saved?.config) game.setConfig(saved.config);
-else if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  game.setConfig({ reducedMotion: true });
-}
+game.setConfig(initialConfig({
+  touchscreen: hasTouchscreen(),
+  saved: saved?.config,
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+}));
 
 const fallback = PRESETS[0];
 const storedArticle = saved?.article?.text ? saved.article : null;

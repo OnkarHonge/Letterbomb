@@ -169,14 +169,18 @@
         </div>
       </div>
       <div id="quadrant-board" hidden>
-        <span class="quadrant-edge is-col-a"></span>
-        <span class="quadrant-edge is-col-b"></span>
-        <span class="quadrant-edge is-row-a"></span>
-        <span class="quadrant-edge is-row-b"></span>
-        <span class="quadrant-label is-nw">A–G<br>0–2</span>
-        <span class="quadrant-label is-ne">H–M<br>3–4</span>
-        <span class="quadrant-label is-sw">N–S<br>5–6</span>
-        <span class="quadrant-label is-se">T–Z<br>7–9</span>
+        <div id="quadrant-grid" hidden>
+          <span class="quadrant-edge is-col-a"></span>
+          <span class="quadrant-edge is-col-b"></span>
+          <span class="quadrant-edge is-row-a"></span>
+          <span class="quadrant-edge is-row-b"></span>
+        </div>
+        <div id="quadrant-labels" hidden>
+          <span class="quadrant-label is-nw">A–G<br>0–2</span>
+          <span class="quadrant-label is-ne">H–M<br>3–4</span>
+          <span class="quadrant-label is-sw">N–S<br>5–6</span>
+          <span class="quadrant-label is-se">T–Z<br>7–9</span>
+        </div>
       </div>
     </section>
 
@@ -213,6 +217,15 @@
           <span><strong>Recital</strong><small>A phrase stays up to read. The first letter hides it, and the rest come from memory.</small></span>
         </label>
       </div>
+      <label class="check">
+        <span><strong>Corner labels</strong><p>Names each corner. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9.</p></span>
+        <input id="cfg-corner-labels" type="checkbox">
+      </label>
+      <label class="check">
+        <span><strong>Grid lines</strong><p>Draws the cross between the four corners. A tap in the middle does nothing.</p></span>
+        <input id="cfg-corner-grid" type="checkbox">
+      </label>
+      <p id="cfg-corner-note" class="field-help" hidden>Recital uses the letter keys. Corner labels and grid lines stay off until you switch back to Words.</p>
       <label class="field">
         <span>Which words need a key</span>
         <select id="cfg-filter">

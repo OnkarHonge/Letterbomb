@@ -26,6 +26,8 @@ export const DEFAULT_CONFIG = {
   showTimeBar: true,
   reducedMotion: false,
   showKeypad: true,
+  showCornerLabels: false,
+  showCornerGrid: false,
   focusMode: false,
   fontScale: 1,
   roundSize: 40,
@@ -34,6 +36,29 @@ export const DEFAULT_CONFIG = {
   spotLookMs: 350,
   playMode: 'words',
 };
+
+/** Corner labels and grid lines start on only for a touchscreen. */
+export function configForDevice(touchscreen) {
+  const on = Boolean(touchscreen);
+  return {
+    ...DEFAULT_CONFIG,
+    showCornerLabels: on,
+    showCornerGrid: on,
+  };
+}
+
+/**
+ * The config a visit starts from.
+ * A saved choice wins, including an explicit off.
+ * A missing corner switch takes the device default.
+ * Reduced motion applies only when nothing is saved.
+ */
+export function initialConfig({ touchscreen = false, saved, reducedMotion = false } = {}) {
+  const base = configForDevice(touchscreen);
+  if (saved && typeof saved === 'object') return sanitizeConfig({ ...base, ...saved });
+  if (reducedMotion) return sanitizeConfig({ ...base, reducedMotion: true });
+  return sanitizeConfig(base);
+}
 
 export const PACE_PRESETS = {
   linger: {
@@ -141,6 +166,8 @@ export function sanitizeConfig(input) {
   config.showTimeBar = asBool(config.showTimeBar, DEFAULT_CONFIG.showTimeBar);
   config.reducedMotion = asBool(config.reducedMotion, DEFAULT_CONFIG.reducedMotion);
   config.showKeypad = asBool(config.showKeypad, DEFAULT_CONFIG.showKeypad);
+  config.showCornerLabels = asBool(config.showCornerLabels, DEFAULT_CONFIG.showCornerLabels);
+  config.showCornerGrid = asBool(config.showCornerGrid, DEFAULT_CONFIG.showCornerGrid);
   config.focusMode = asBool(config.focusMode, DEFAULT_CONFIG.focusMode);
   config.spotCheck = asBool(config.spotCheck, DEFAULT_CONFIG.spotCheck);
   config.playMode = PLAY_MODES.has(config.playMode) ? config.playMode : DEFAULT_CONFIG.playMode;

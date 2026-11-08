@@ -5,6 +5,7 @@ import { DEFAULT_CONFIG, LIMITS, PLAY_MODES, THEMES, VIEW_MODES } from '../src/e
 import { FILTERS, LONG_WORD_LETTERS, VOWELS } from '../src/engine/parseText.js';
 import {
   RECALL_QUESTION,
+  cornerBoard,
   missRule,
   pauseRule,
   recallHeading,
@@ -88,6 +89,8 @@ describe('page and engine', () => {
     expect(checked('cfg-focus')).toBe(DEFAULT_CONFIG.focusMode);
     expect(checked('cfg-motion')).toBe(DEFAULT_CONFIG.reducedMotion);
     expect(checked('cfg-spot')).toBe(DEFAULT_CONFIG.spotCheck);
+    expect(checked('cfg-corner-labels')).toBe(DEFAULT_CONFIG.showCornerLabels);
+    expect(checked('cfg-corner-grid')).toBe(DEFAULT_CONFIG.showCornerGrid);
     expect(checked('cfg-end-question')).toBe(DEFAULT_CONFIG.endQuestion);
     expect(html).toContain(`>${DEFAULT_CONFIG.spotLookMs} ms<`);
     expect(html).toContain('id="idle-spot"');
@@ -208,6 +211,19 @@ describe('page and engine', () => {
     );
     expect(html).toContain('id="cfg-look-field" hidden');
     expect(html).toContain('Spot check stays off until you switch back to Words.');
+    const playAt = html.indexOf('How you play');
+    const labelsAt = html.indexOf('id="cfg-corner-labels"');
+    const gridAt = html.indexOf('id="cfg-corner-grid"');
+    const filterAt = html.indexOf('id="cfg-filter"');
+    const fastAt = html.indexOf('How fast');
+    expect(playAt).toBeLessThan(labelsAt);
+    expect(labelsAt).toBeLessThan(gridAt);
+    expect(gridAt).toBeLessThan(filterAt);
+    expect(filterAt).toBeLessThan(fastAt);
+    expect(html).toContain('id="cfg-corner-note" class="field-help" hidden');
+    expect(html).toContain('Corner labels and grid lines stay off until you switch back to Words.');
+    expect(html).toContain('id="quadrant-grid"');
+    expect(html).toContain('id="quadrant-labels"');
     expect(html).toContain('Question at the end');
     expect(html).toContain('Puts every control on this screen back to the start. The article stays.');
     expect(html).toContain('>Reset all<');
@@ -309,6 +325,25 @@ describe('page and engine', () => {
       gap: false,
       label: '',
     });
+  });
+});
+
+describe('corner guides', () => {
+  it('draws a label and a grid line only while Words is in play', () => {
+    const on = { playMode: 'words', showCornerLabels: true, showCornerGrid: true, active: true };
+    expect(cornerBoard(on)).toEqual({ board: true, labels: true, grid: true });
+    expect(cornerBoard({ ...on, showCornerGrid: false })).toEqual({
+      board: true,
+      labels: true,
+      grid: false,
+    });
+    expect(cornerBoard({ ...on, showCornerLabels: false, showCornerGrid: false })).toEqual({
+      board: false,
+      labels: false,
+      grid: false,
+    });
+    expect(cornerBoard({ ...on, active: false }).board).toBe(false);
+    expect(cornerBoard({ ...on, playMode: 'recital' }).board).toBe(false);
   });
 });
 
