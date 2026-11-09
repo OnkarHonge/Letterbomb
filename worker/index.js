@@ -1,4 +1,5 @@
 // One shelf per sync phrase. The phrase is hashed and never stored.
+// Articles and their kept lines share that shelf. A line never travels alone.
 import {
   articleKey,
   blockedByTombstone,
@@ -7,6 +8,12 @@ import {
   planShelf,
   planTombstones,
 } from '../src/shelf.js';
+import {
+  admitHighlight,
+  blockedHighlight,
+  planHighlightTombstones,
+  planHighlights,
+} from '../src/highlights.js';
 
 const PHRASE_HEADER = 'X-Reflex-Phrase';
 
@@ -36,22 +43,13 @@ function phraseFrom(request) {
 }
 
 function emptyShelf() {
-  return { version: 1, articles: [], tombstones: [] };
-}
-
-async function readShelf(env, key) {
-  const raw = await env.SHELF.get(key);
-  if (!raw) return emptyShelf();
-  try {
-    const data = JSON.parse(raw);
-    const tombstones = planTombstones(data?.tombstones);
-    const articles = planShelf(data?.articles).articles
-      .filter((article) => !blockedByTombstone(article.text, article.updatedAt, tombstones))
-      .map(publicArticle);
-    return { version: 1, articles, tombstones };
-  } catch {
-    return emptyShelf();
-  }
+  return {
+    version: 1,
+    articles: [],
+    tombstones: [],
+    highlights: [],
+    highlightTombstones: [],
+  };
 }
 
 function publicArticle(article) {
@@ -60,6 +58,35 @@ function publicArticle(article) {
     label: article.label,
     text: article.text,
     updatedAt: article.updatedAt,
+  };
+}
+
+async function readShelf(env, key) {
+  const raw = await env.SHELF.get(key);
+  if (!raw) return emptyShelf();
+  try {
+    const data = JSON.parse(raw);
+    const tombstones = planTombstones(data?.tombstones);
+    const highlightTombstones = planHighlightTombstones(data?.highlightTombstones);
+    const articles = planShelf(data?.articles).articles
+      .filter((article) => !blockedByTombstone(article.text, article.updatedAt, tombstones))
+      .map(publicArticle);
+    const highlights = planHighlights(data?.highlights)
+      .filter((item) => !blockedHighlight(item, highlightTombstones));
+    return { version: 1, articles, tombstones, highlights, highlightTombstones };
+  } catch {
+    return emptyShelf();
+  }
+}
+
+function stored(document, extra = {}) {
+  return {
+    version: 1,
+    articles: document.articles,
+    tombstones: document.tombstones,
+    highlights: document.highlights,
+    highlightTombstones: document.highlightTombstones,
+    ...extra,
   };
 }
 
@@ -82,9 +109,27 @@ export async function handleRequest(request, env) {
     } catch {
       return withCors(json({ error: 'body' }, 400));
     }
+    const current = await readShelf(env, key);
+    if (body?.highlight) {
+      const admitted = admitHighlight(current.highlights, body.highlight);
+      if (!admitted.ok) return withCors(json(stored(current, { refused: admitted.reason })));
+      if (blockedHighlight(admitted.highlight, current.highlightTombstones)) {
+        return withCors(json(stored(current, { refused: 'blocked' })));
+      }
+      const highlightTombstones = planHighlightTombstones(
+        current.highlightTombstones.filter((item) => item.id !== admitted.highlight.id),
+      );
+      const next = stored({
+        ...current,
+        highlights: admitted.highlights,
+        highlightTombstones,
+      });
+      await env.SHELF.put(key, JSON.stringify(next));
+      return withCors(json(next));
+    }
+
     const incoming = Array.isArray(body?.articles) ? body.articles : body?.article ? [body.article] : [];
-    const stored = await readShelf(env, key);
-    let tombstones = stored.tombstones;
+    let tombstones = current.tombstones;
     const kept = [];
     for (const article of incoming) {
       const text = String(article?.text || '');
@@ -94,8 +139,12 @@ export async function handleRequest(request, env) {
       tombstones = tombstones.filter((item) => item.key !== articleKey(text));
       kept.push(article);
     }
-    const articles = planShelf([...stored.articles, ...kept]).articles.map(publicArticle);
-    const next = { version: 1, articles, tombstones: planTombstones(tombstones) };
+    const articles = planShelf([...current.articles, ...kept]).articles.map(publicArticle);
+    const next = stored({
+      ...current,
+      articles,
+      tombstones: planTombstones(tombstones),
+    });
     await env.SHELF.put(key, JSON.stringify(next));
     return withCors(json(next));
   }
@@ -107,17 +156,31 @@ export async function handleRequest(request, env) {
     } catch {
       return withCors(json({ error: 'body' }, 400));
     }
+    const current = await readShelf(env, key);
+    const highlightId = typeof body?.highlightId === 'string' ? body.highlightId.trim() : '';
+    if (highlightId) {
+      const deletedAt = Date.now();
+      const next = stored({
+        ...current,
+        highlights: current.highlights.filter((item) => item.id !== highlightId),
+        highlightTombstones: planHighlightTombstones([
+          ...current.highlightTombstones,
+          { id: highlightId, deletedAt },
+        ]),
+      });
+      await env.SHELF.put(key, JSON.stringify(next));
+      return withCors(json(next));
+    }
+
     const text = String(body?.text || '');
     if (!text.trim()) return withCors(json({ error: 'body' }, 400));
-    const stored = await readShelf(env, key);
     const removal = articleKey(text);
     const deletedAt = Date.now();
-    const articles = stored.articles.filter((article) => articleKey(article.text) !== removal);
-    const next = {
-      version: 1,
-      articles,
-      tombstones: planTombstones([...stored.tombstones, { key: removal, deletedAt }]),
-    };
+    const next = stored({
+      ...current,
+      articles: current.articles.filter((article) => articleKey(article.text) !== removal),
+      tombstones: planTombstones([...current.tombstones, { key: removal, deletedAt }]),
+    });
     await env.SHELF.put(key, JSON.stringify(next));
     return withCors(json(next));
   }

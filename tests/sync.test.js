@@ -5,12 +5,16 @@ import {
   articleKey,
   articleToOpen,
   deleteSharedArticle,
+  deleteSharedHighlight,
+  loadHighlights,
   loadHistory,
   loadPhrase,
   loadShelfCache,
   loadTombstones,
   publishArticle,
+  publishHighlight,
   pullShelf,
+  rememberHighlight,
   rememberHistory,
   writePhrase,
   writeShelfCache,
@@ -373,5 +377,47 @@ describe('article shelf', () => {
     );
     expect(restored.blocked).toBeUndefined();
     expect(restored.articles.map((item) => item.text)).toEqual(['Drop this.', 'Keep this.']);
+  });
+
+  it('shares a kept line on the article shelf and drops it from every device', async () => {
+    const env = {
+      SHELF: {
+        async get(key) {
+          return map.has(key) ? map.get(key) : null;
+        },
+        async put(key, value) {
+          map.set(key, String(value));
+        },
+      },
+    };
+    const map = new Map();
+    const fetchImpl = (url, options) => handleRequest(new Request(url, options), env);
+    const options = shelfOptions(fetchImpl);
+    writePhrase(PHRASE);
+    const line = {
+      id: 'line-1',
+      articleKey: 'article-a',
+      articleLabel: 'Notes',
+      source: 'Golf Hotel.',
+      note: 'Golf and Hotel.',
+      start: 2,
+      end: 4,
+      updatedAt: 12,
+      createdAt: 12,
+    };
+    expect(rememberHighlight(line).map((item) => item.note)).toEqual(['Golf and Hotel.']);
+    const published = await publishHighlight(line, options);
+    expect(published.ok).toBe(true);
+    expect(published.highlights).toHaveLength(1);
+    const pulled = await pullShelf(options);
+    expect(pulled.highlights[0].note).toBe('Golf and Hotel.');
+    expect(pulled.articles).toEqual([]);
+
+    const removed = await deleteSharedHighlight(line.id, options);
+    expect(removed.ok).toBe(true);
+    expect(loadHighlights()).toEqual([]);
+    const again = await publishHighlight({ ...line, updatedAt: 13 }, options);
+    expect(again.blocked).toBe(true);
+    expect((await pullShelf(options)).highlights).toEqual([]);
   });
 });
