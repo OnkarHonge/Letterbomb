@@ -32,6 +32,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let status = STATUS.IDLE;
   let index = 0;
   let roundStartIndex = 0;
+  let frontier = 0;
+  let roundWords = 0;
   let wordStartedAt = 0;
   let deadlineMs = 0;
   let responded = false;
@@ -149,6 +151,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function enterRiff(at, cursor) {
+    reach(cursor, true);
     index = cursor;
     recital.phase = 'riff';
     responded = false;
@@ -208,12 +211,144 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     emit({ type: 'finish', score, maxStreak, recall: Boolean(recall) });
   }
 
+  /**
+   * Words before `frontier` were reached, or passed by a jump.
+   * Playing them again is practice: no points, and the streak stays.
+   * Only a forward step through new words counts toward the breath.
+   */
+  function reach(upTo, credit) {
+    if (upTo <= frontier) return;
+    if (credit) roundWords += upTo - frontier;
+    frontier = upTo;
+  }
+
+  function sentenceSpanAt(cursor) {
+    let start = cursor;
+    while (start > 0 && !words[start].breakBefore && !isTerminator(words[start - 1].original)) {
+      start -= 1;
+    }
+    let end = cursor;
+    while (
+      end + 1 < words.length
+      && !isTerminator(words[end].original)
+      && !words[end + 1].breakBefore
+    ) {
+      end += 1;
+    }
+    return { start, end };
+  }
+
+  function recitalPhrases() {
+    return phraseSpans.filter((span) => span.kind === 'phrase');
+  }
+
+  function recitalSpanAt(cursor) {
+    return recitalPhrases().find((span) => cursor >= span.start && cursor < span.end) || null;
+  }
+
+  function recitalStep(dir) {
+    const phrases = recitalPhrases();
+    if (!phrases.length) return null;
+    const current = phrases.findIndex((span) => index >= span.start && index < span.end);
+    if (dir > 0) {
+      if (current >= 0) return phrases[current + 1]?.start ?? null;
+      return phrases.find((span) => span.start > index)?.start ?? null;
+    }
+    if (current >= 0) {
+      if (index > phrases[current].start) return phrases[current].start;
+      return phrases[current - 1]?.start ?? null;
+    }
+    for (let i = phrases.length - 1; i >= 0; i -= 1) {
+      if (phrases[i].start < index) return phrases[i].start;
+    }
+    return null;
+  }
+
+  function stepTarget(dir) {
+    if (!words[index]) return null;
+    if (config.playMode === 'recital') return recitalStep(dir);
+    const span = sentenceSpanAt(index);
+    if (dir > 0) {
+      const next = span.end + 1;
+      return next < words.length ? next : null;
+    }
+    if (index > span.start) return span.start;
+    if (span.start === 0) return null;
+    return sentenceSpanAt(span.start - 1).start;
+  }
+
+  function stepLine(dir, dest) {
+    const unit = config.playMode === 'recital' ? 'phrase' : 'sentence';
+    if (dir > 0) return `Next ${unit}.`;
+    const span = config.playMode === 'recital' ? recitalSpanAt(index) : sentenceSpanAt(index);
+    const start = span?.start;
+    if (start === dest && dest !== index) {
+      return config.playMode === 'recital' ? 'Start of this phrase.' : 'Start of this sentence.';
+    }
+    return `Previous ${unit}.`;
+  }
+
+  function roundPlace() {
+    const place = index < frontier ? roundWords : roundWords + 1;
+    return Math.max(1, place);
+  }
+
+  function stepOptions() {
+    const allowed = status === STATUS.PLAYING || status === STATUS.FROZEN || status === STATUS.PAUSED;
+    if (!allowed || index < 0 || index >= words.length) {
+      return { previous: false, next: false };
+    }
+    return {
+      previous: stepTarget(-1) != null,
+      next: stepTarget(1) != null,
+    };
+  }
+
+  /**
+   * Land on `dest` with a full timer.
+   * A gap ahead of the furthest word is passed: it does not score and
+   * it does not count toward the breath. The breath's start stays put.
+   */
+  function moveTo(dest, at, { stayPaused, grantOpening }) {
+    if (responded && index >= frontier && index < words.length) reach(index + 1, true);
+    if (dest > frontier) frontier = dest;
+    index = dest;
+    responded = false;
+    missReason = null;
+    missedKey = null;
+    held = false;
+    spotPhase = null;
+    opening = false;
+    freezeUntil = 0;
+    if (grantOpening) pendingOpening = true;
+
+    const span = config.playMode === 'recital' ? spanContaining(index) : null;
+    const phrase = span?.kind === 'phrase' && span.start === index ? span : null;
+    if (stayPaused) {
+      status = STATUS.PAUSED;
+      if (phrase) {
+        const lookMs = recitalLookMs(words.slice(phrase.start, phrase.end), config, false);
+        recital = { start: phrase.start, end: phrase.end, phase: 'look', lookMs };
+        deadlineMs = lookMs;
+      } else {
+        recital = null;
+        deadlineMs = deadlineFor(words[index]);
+      }
+      return;
+    }
+
+    beginWord(at);
+  }
+
   function advance(at) {
     let next = index + 1;
     if (recital?.phase === 'reveal') {
       next = recital.end;
       recital = null;
     }
+    const from = index;
+    const frontierBefore = frontier;
+    reach(next, true);
     if (next >= words.length) {
       index = words.length;
       recital = null;
@@ -221,9 +356,9 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       return;
     }
 
-    const doneInRound = next - roundStartIndex;
     index = next;
-    const roundReady = config.roundSize > 0 && doneInRound >= config.roundSize;
+    const counted = from >= frontierBefore;
+    const roundReady = counted && config.roundSize > 0 && roundWords >= config.roundSize;
     if (roundReady && isTerminator(words[next - 1]?.original)) {
       status = STATUS.BREAK;
       responded = false;
@@ -233,7 +368,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       missReason = null;
       missedKey = null;
       openRecall();
-      emit({ type: 'break', completed: doneInRound, recall: Boolean(recall) });
+      emit({ type: 'break', completed: roundWords, recall: Boolean(recall) });
       return;
     }
 
@@ -241,19 +376,33 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function hit(at, reactionOverride) {
+    const practice = index < frontier;
     const reaction = reactionOverride !== undefined
       ? reactionOverride
       : Math.max(0, Math.round(at - wordStartedAt));
-    streak += 1;
-    if (streak > maxStreak) maxStreak = streak;
-    ascent += 1;
-    hits += 1;
-    reactionTimes.push(reaction);
-    const points = pointsForHit(streak);
-    score += points;
+    let points = 0;
+    if (!practice) {
+      streak += 1;
+      if (streak > maxStreak) maxStreak = streak;
+      ascent += 1;
+      hits += 1;
+      reactionTimes.push(reaction);
+      points = pointsForHit(streak);
+      score += points;
+    }
     responded = true;
-    const sentenceEnd = isTerminator(words[index]?.original);
-    emit({ type: 'hit', points, reaction, streak, score, maxStreak, ascent, sentenceEnd });
+    const sentenceEnd = !practice && isTerminator(words[index]?.original);
+    emit({
+      type: 'hit',
+      points,
+      reaction,
+      streak,
+      score,
+      maxStreak,
+      ascent,
+      sentenceEnd,
+      practice,
+    });
     if (sentenceEnd) {
       emit({ type: 'milestone', ascent });
       ascent = 0;
@@ -269,9 +418,12 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function miss(reason, at, pressed) {
-    misses += 1;
-    streak = 0;
-    ascent = 0;
+    const practice = index < frontier;
+    if (!practice) {
+      misses += 1;
+      streak = 0;
+      ascent = 0;
+    }
     responded = true;
     missReason = reason;
     missedKey = pressed;
@@ -280,6 +432,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       reason,
       answer: owedKey(words[index]),
       pressed,
+      practice,
     });
 
     const freezeMs = Math.round(Math.max(0, config.freezeSec) * 1000);
@@ -299,6 +452,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     resetStats();
     index = 0;
     roundStartIndex = 0;
+    frontier = 0;
+    roundWords = 0;
     status = STATUS.IDLE;
     responded = false;
     missReason = null;
@@ -348,6 +503,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     resetStats();
     index = 0;
     roundStartIndex = 0;
+    frontier = 0;
+    roundWords = 0;
     held = false;
     missReason = null;
     missedKey = null;
@@ -428,6 +585,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       return true;
     }
     roundStartIndex = index;
+    roundWords = 0;
     pendingOpening = true;
     beginWord(at);
     return true;
@@ -437,25 +595,30 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (status !== STATUS.PAUSED) return false;
     const nextIndex = Number(target);
     if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= words.length) return false;
-    responded = false;
-    missReason = null;
-    missedKey = null;
-    opening = false;
-    spotPhase = null;
-    recital = null;
     const span = config.playMode === 'recital' ? spanContaining(nextIndex) : null;
-    if (span?.kind === 'phrase') {
-      index = span.start;
-      roundStartIndex = span.start;
-      const lookMs = recitalLookMs(words.slice(span.start, span.end), config, false);
-      recital = { start: span.start, end: span.end, phase: 'look', lookMs };
-      deadlineMs = lookMs;
-    } else {
-      index = nextIndex;
-      roundStartIndex = nextIndex;
-      deadlineMs = deadlineFor(words[index]);
-    }
+    const dest = span?.kind === 'phrase' ? span.start : nextIndex;
+    moveTo(dest, now(), { stayPaused: true, grantOpening: false });
     emit({ type: 'jump', index });
+    return true;
+  }
+
+  /**
+   * Left restarts the current sentence, then steps to the previous one.
+   * Right skips to the next sentence. Recital uses phrases instead.
+   * The landing word starts clean, with the opening pause on its first target.
+   */
+  function stepSentence(direction, at = now()) {
+    if (status !== STATUS.PLAYING && status !== STATUS.FROZEN && status !== STATUS.PAUSED) {
+      return false;
+    }
+    if (!Number.isFinite(direction) || direction === 0) return false;
+    if (index < 0 || index >= words.length) return false;
+    const dir = direction < 0 ? -1 : 1;
+    const dest = stepTarget(dir);
+    if (dest == null || dest === index) return false;
+    const line = stepLine(dir, dest);
+    moveTo(dest, at, { stayPaused: status === STATUS.PAUSED, grantOpening: true });
+    emit({ type: 'step', direction: dir, index, line });
     return true;
   }
 
@@ -667,6 +830,9 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       total,
       roundSize: config.roundSize,
       roundStart: roundStartIndex,
+      roundWords,
+      roundPlace: roundPlace(),
+      step: stepOptions(),
       progress,
       deadlineMs,
       score,
@@ -717,6 +883,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     cover,
     continueRound,
     jumpTo,
+    stepSentence,
     hold,
     release,
     answerRecall,
