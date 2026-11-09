@@ -96,6 +96,16 @@ describe('sound', () => {
     expect(played.every((note) => note.type === 'sine')).toBe(true);
   });
 
+  it('steps back down and forward up', () => {
+    const played = installAudio();
+    const sound = createSound();
+    sound.step(-1);
+    sound.step(1);
+    expect(played[0].frequency).toBeGreaterThan(played[0].ramp);
+    expect(played[1].ramp).toBeGreaterThan(played[1].frequency);
+    expect(played.every((note) => note.type === 'sine')).toBe(true);
+  });
+
   it('keeps the miss tone', () => {
     const played = installAudio();
     const sound = createSound();

@@ -12,6 +12,7 @@ import {
   RECITAL_IDLE,
   recallPrompt,
   roundNote,
+  stepHint,
   targetHud,
   wordMarks,
 } from '../src/ui/paint.js';
@@ -175,6 +176,15 @@ describe('page and engine', () => {
     expect(html).toContain('tap the corner for its group');
     expect(html).toContain('id="enter-full"');
     expect(html).toContain('id="exit-full"');
+    expect(html).toContain('id="sentence-prev"');
+    expect(html).toContain('id="sentence-next"');
+    expect(html).toContain('id="pause-prev"');
+    expect(html).toContain('id="pause-next"');
+    expect(html).toContain('id="strike-prev"');
+    expect(html).toContain('id="strike-next"');
+    expect(html).toContain(stepHint('words'));
+    expect(stepHint('recital')).toContain('next phrase');
+    expect(stepHint('words')).toContain('next sentence');
     expect(html).toContain('id="idle-start" class="btn btn-primary btn-large btn-block"');
     expect(html).toContain('id="idle-drill" class="btn btn-block"');
     expect(html).toContain('Drill corners');

@@ -101,6 +101,10 @@ function drain(at = performance.now()) {
 
 function handleEvent(event) {
   if (event.type === 'hit') {
+    if (event.practice) {
+      sound.hit(1);
+      return;
+    }
     if (!event.sentenceEnd) sound.hit(event.ascent);
     painter.pop(`+${event.points}`, 'hit');
     rememberScore(event.score);
@@ -173,6 +177,12 @@ function handleEvent(event) {
       : 'Article complete.';
     setText(live, [lead, ...notes].join(' '));
     scheduleSave();
+    return;
+  }
+
+  if (event.type === 'step') {
+    sound.step(event.direction);
+    setText(live, event.line);
     return;
   }
 
@@ -365,6 +375,21 @@ must('paused-resume').addEventListener('click', (event) => {
   drain();
 });
 
+function stepBy(direction, button) {
+  if (drill.snapshot().on) return;
+  sound.unlock();
+  button?.blur();
+  if (game.stepSentence(direction, performance.now())) drain();
+}
+
+for (const id of ['sentence-prev', 'pause-prev', 'strike-prev']) {
+  must(id).addEventListener('click', (event) => stepBy(-1, event.currentTarget));
+}
+
+for (const id of ['sentence-next', 'pause-next', 'strike-next']) {
+  must(id).addEventListener('click', (event) => stepBy(1, event.currentTarget));
+}
+
 must('break-continue').addEventListener('click', (event) => {
   sound.unlock();
   event.currentTarget.blur();
@@ -493,6 +518,16 @@ window.addEventListener('keydown', (event) => {
     if (control && !control.closest('[hidden]')) return;
     event.preventDefault();
     onSpace();
+    return;
+  }
+
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (drill.snapshot().on) return;
+    const liveRound = game.status === 'playing' || game.status === 'paused' || game.status === 'frozen';
+    if (!liveRound) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    stepBy(event.key === 'ArrowRight' ? 1 : -1);
     return;
   }
 

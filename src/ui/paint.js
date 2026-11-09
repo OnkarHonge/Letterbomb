@@ -46,6 +46,13 @@ export const SPOT_IDLE = 'Spot check is on. About one in five longer words stays
 export const RECITAL_IDLE = 'Recital is on. A phrase stays up to read. The first letter hides it, and the rest come from memory on a short fuse.';
 export const QUADRANT_IDLE = 'On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.';
 
+/** How Left and Right move. Recital steps by phrase. Words steps by sentence. */
+export function stepHint(playMode) {
+  const unit = playMode === 'recital' ? 'phrase' : 'sentence';
+  const current = playMode === 'recital' ? 'this phrase' : 'this sentence';
+  return `Left arrow restarts ${current}, then steps to the previous one. Right arrow skips to the next ${unit}. Previous and Next above the text do the same.`;
+}
+
 /** A wide space is named Pause. A dash stays visible and is still a gap. */
 export function wordMarks(word) {
   const gap = Boolean(word?.isGap);
@@ -318,7 +325,15 @@ export function createPainter() {
   const quadrantGrid = must('quadrant-grid');
   const quadrantLabels = must('quadrant-labels');
   const idleRound = must('idle-round');
+  const idleStep = must('idle-step');
   const idleMiss = must('idle-miss');
+  const sentenceStep = must('sentence-step');
+  const sentencePrev = must('sentence-prev');
+  const sentenceNext = must('sentence-next');
+  const sentencePrevLabel = must('sentence-prev-label');
+  const sentenceNextLabel = must('sentence-next-label');
+  const previousButtons = [sentencePrev, must('pause-prev'), must('strike-prev')];
+  const nextButtons = [sentenceNext, must('pause-next'), must('strike-next')];
   const pauseCopy = must('pause-copy');
   const idleStart = must('idle-start');
   const idleDrill = must('idle-drill');
@@ -780,7 +795,7 @@ export function createPainter() {
         roundMeta,
         snap.status === 'break'
           ? 'Round complete'
-          : `Round ${snap.index - snap.roundStart + 1} / ${config.roundSize}`,
+          : `Round ${snap.roundPlace} / ${config.roundSize}`,
       );
     } else {
       roundMeta.hidden = true;
@@ -833,9 +848,26 @@ export function createPainter() {
     idleDrillNote.hidden = recitalOn;
     idleSpot.hidden = recitalOn || !config.spotCheck;
     setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
-    const finishedRound = snap.status === 'break'
-      ? Math.max(0, snap.index - snap.roundStart)
-      : config.roundSize;
+    const finishedRound = snap.status === 'break' ? snap.roundWords : config.roundSize;
+    const unit = config.playMode === 'recital' ? 'phrase' : 'sentence';
+    sentenceStep.hidden = drilling || snap.status !== 'playing';
+    setText(sentencePrevLabel, `Previous ${unit}`);
+    setText(sentenceNextLabel, `Next ${unit}`);
+    const previousName = `Previous ${unit}`;
+    const nextName = `Next ${unit}`;
+    for (const button of previousButtons) {
+      button.disabled = !snap.step?.previous;
+      if (button.getAttribute('aria-label') !== previousName) {
+        button.setAttribute('aria-label', previousName);
+      }
+    }
+    for (const button of nextButtons) {
+      button.disabled = !snap.step?.next;
+      if (button.getAttribute('aria-label') !== nextName) {
+        button.setAttribute('aria-label', nextName);
+      }
+    }
+    setText(idleStep, stepHint(config.playMode));
     setText(
       breakCopy,
       `You finished a round of ${finishedRound} words. Your streak stays. This is a pause, not a penalty.`,

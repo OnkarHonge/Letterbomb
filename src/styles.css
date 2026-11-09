@@ -323,9 +323,13 @@ h3 {
   z-index: 5;
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  align-items: baseline;
+  gap: 8px 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
+#article-meta { flex: 1 1 auto; min-width: 8rem; }
+.sentence-step { display: flex; flex: 0 0 auto; gap: 6px; }
+.sentence-step .btn { min-height: 36px; padding: 0 10px; font-size: 0.82rem; }
 #exit-full { display: none; flex: 0 0 auto; }
 body.is-reading-full .top,
 body.is-reading-full .hud,
@@ -383,12 +387,16 @@ body.is-reading-full #exit-full,
   left: 12px;
   right: 12px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   margin: 0;
   padding: 6px 10px;
   border-radius: 14px;
 }
+.banner-copy { flex: 1 1 12rem; min-width: 0; }
+.banner-actions { display: flex; flex: 0 0 auto; gap: 6px; }
+.banner-actions .btn { min-height: 36px; padding: 0 10px; font-size: 0.82rem; }
 .strike {
   border: 1px solid var(--miss);
   background: var(--miss-bg);

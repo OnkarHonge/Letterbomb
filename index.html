@@ -66,6 +66,14 @@
     <section class="arena" id="arena" aria-label="Reading">
       <div class="arena-top">
         <p id="article-meta">Loading article</p>
+        <div id="sentence-step" class="sentence-step" role="group" aria-label="Move through the text" hidden>
+          <button type="button" id="sentence-prev" class="btn" aria-label="Previous sentence">
+            <span class="full" id="sentence-prev-label">Previous sentence</span><span class="short">Prev</span>
+          </button>
+          <button type="button" id="sentence-next" class="btn" aria-label="Next sentence">
+            <span class="full" id="sentence-next-label">Next sentence</span><span class="short">Next</span>
+          </button>
+        </div>
         <p id="round-meta"></p>
         <button type="button" id="exit-full" class="btn">Exit</button>
       </div>
@@ -82,17 +90,25 @@
       </div>
       <div id="strike" class="strike" hidden>
         <div class="strike-icon" aria-hidden="true">!</div>
-        <div>
+        <div class="banner-copy">
           <p id="strike-text"></p>
           <p id="strike-sub"></p>
         </div>
+        <div class="banner-actions">
+          <button type="button" id="strike-prev" class="btn" aria-label="Previous sentence">Prev</button>
+          <button type="button" id="strike-next" class="btn" aria-label="Next sentence">Next</button>
+        </div>
       </div>
       <div id="pause-bar" class="pause-bar" hidden>
-        <div>
+        <div class="banner-copy">
           <strong>Paused</strong>
           <p id="pause-copy">This word starts fresh when you resume. Click a word to move the highlight.</p>
         </div>
-        <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
+        <div class="banner-actions">
+          <button type="button" id="pause-prev" class="btn" aria-label="Previous sentence">Prev</button>
+          <button type="button" id="pause-next" class="btn" aria-label="Next sentence">Next</button>
+          <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
+        </div>
       </div>
       <div class="stage">
         <div id="karaoke" class="karaoke"></div>
@@ -121,6 +137,7 @@
             <button type="button" id="idle-drill" class="btn btn-block">Drill corners</button>
             <p id="idle-drill-note" class="hint">One letter at a time. It stays until you tap its corner.</p>
             <p class="hint">Space also starts, pauses, and resumes.</p>
+            <p id="idle-step" class="hint">Left arrow restarts this sentence, then steps to the previous one. Right arrow skips to the next sentence. Previous and Next above the text do the same.</p>
             <p id="idle-round" class="hint"></p>
             <p id="idle-recital" class="hint" hidden></p>
             <p id="idle-areas" class="hint">On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.</p>

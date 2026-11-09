@@ -61,6 +61,20 @@ export function createSound() {
         // Ignore audio graph errors.
       }
     },
+    step(direction) {
+      try {
+        const forward = direction > 0;
+        tone({
+          frequency: forward ? 520 : 440,
+          endFrequency: forward ? 740 : 260,
+          duration: 0.08,
+          type: 'sine',
+          gain: 0.04,
+        });
+      } catch {
+        // Ignore audio graph errors.
+      }
+    },
     miss() {
       try {
         tone({
