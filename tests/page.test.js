@@ -15,7 +15,7 @@ import {
   targetHud,
   wordMarks,
 } from '../src/ui/paint.js';
-import { historyHeading, historyTitle } from '../src/ui/library.js';
+import { historyHeading, historyTitle, keptHeading } from '../src/ui/library.js';
 import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
@@ -354,6 +354,13 @@ describe('articles panel', () => {
     expect(historyHeading(20)).toBe('History · 20. 4 left before the oldest drops.');
     expect(historyHeading(23)).toBe('History · 23. 1 left before the oldest drops.');
     expect(historyHeading(24)).toBe('History · 24. Adding one drops the oldest.');
+    expect(keptHeading(3)).toBe('Kept lines · 3');
+    expect(keptHeading(200)).toBe('Kept lines · 200. Remove one before keeping another.');
+    expect(html).toContain('id="keep-line"');
+    expect(html).toContain('id="modal-mark"');
+    expect(html).toContain('id="kept-list"');
+    expect(html).toContain('id="break-keep"');
+    expect(html).toContain('The same phrase shares History and kept lines.');
   });
 });
 

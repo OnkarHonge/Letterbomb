@@ -66,6 +66,7 @@
     <section class="arena" id="arena" aria-label="Reading">
       <div class="arena-top">
         <p id="article-meta">Loading article</p>
+        <button type="button" id="keep-line" class="btn" hidden>Keep</button>
         <p id="round-meta"></p>
         <button type="button" id="exit-full" class="btn">Exit</button>
       </div>
@@ -94,6 +95,13 @@
         </div>
         <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
       </div>
+      <div id="mark-bar" class="pause-bar mark-bar" hidden>
+        <div>
+          <strong>Select a line</strong>
+          <p id="mark-copy">Drag across the words you want to keep. Release to edit them.</p>
+        </div>
+        <button type="button" id="mark-done" class="btn">Done</button>
+      </div>
       <div class="stage">
         <div id="karaoke" class="karaoke"></div>
         <div id="rsvp" class="rsvp" hidden>
@@ -121,6 +129,7 @@
             <button type="button" id="idle-drill" class="btn btn-block">Drill corners</button>
             <p id="idle-drill-note" class="hint">One letter at a time. It stays until you tap its corner.</p>
             <p class="hint">Space also starts, pauses, and resumes.</p>
+            <p id="idle-keep" class="hint">Ctrl+H, or Keep, pauses so you can select words to keep.</p>
             <p id="idle-round" class="hint"></p>
             <p id="idle-recital" class="hint" hidden></p>
             <p id="idle-areas" class="hint">On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.</p>
@@ -140,6 +149,7 @@
               <p id="break-result" class="record" hidden></p>
               <button type="button" id="break-continue" class="btn btn-primary btn-large">Continue</button>
               <p id="break-hint" class="hint">Space continues. Your streak is still there.</p>
+              <button type="button" id="break-keep" class="btn">Keep a line</button>
             </div>
           </div>
           <div id="panel-done" class="panel" hidden>
@@ -164,6 +174,7 @@
                 <button type="button" id="done-again" class="btn btn-primary">Read again</button>
                 <button type="button" id="done-article" class="btn">Change article</button>
               </div>
+              <button type="button" id="done-keep" class="btn">Keep a line</button>
             </div>
           </div>
         </div>
@@ -368,6 +379,13 @@
       <h3 id="synced-title" class="shelf-title" hidden>History</h3>
       <p id="history-note" class="history-note" hidden></p>
       <div id="synced-list" class="preset-grid" hidden></div>
+      <h3 id="kept-title" class="shelf-title" hidden>Kept lines</h3>
+      <p id="kept-note" class="history-note" hidden></p>
+      <div id="kept-list" class="kept-list" hidden></div>
+      <div class="btn-row" id="kept-actions" hidden>
+        <button type="button" id="kept-copy" class="btn">Copy</button>
+        <button type="button" id="kept-download" class="btn">Download</button>
+      </div>
       <label class="field">
         <span class="field-top"><span>Paste a long article</span><b id="article-count">0 words</b></span>
         <textarea id="article-input" rows="8" placeholder="Paste an article, a chapter, or a few paragraphs."></textarea>
@@ -383,10 +401,34 @@
         </span>
         <input id="shelf-phrase" type="password" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Same phrase on every device">
       </label>
-      <p class="field-help">At least 8 characters. The same phrase shares History.</p>
+      <p class="field-help">At least 8 characters. The same phrase shares History and kept lines.</p>
       <p id="phrase-note" class="history-note" hidden></p>
       <div class="btn-row">
         <button type="button" id="save-phrase" class="btn">Save phrase</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-mark" class="modal-back" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mark-title" tabindex="-1">
+      <div class="modal-head">
+        <div>
+          <h2 id="mark-title">Keep this line</h2>
+          <p id="mark-article" class="field-help"></p>
+        </div>
+        <button type="button" class="btn js-close">Close</button>
+      </div>
+      <p id="mark-before-label" class="field-help" hidden>Before this selection</p>
+      <p id="mark-before" class="mark-before" hidden></p>
+      <label class="field">
+        <span>Edit so it stands alone</span>
+        <textarea id="mark-note" rows="6"></textarea>
+      </label>
+      <p id="mark-dialog-note" class="history-note" hidden></p>
+      <div class="btn-row modal-actions">
+        <button type="button" id="mark-add-before" class="btn">Add the sentence before</button>
+        <button type="button" id="mark-save" class="btn btn-primary">Save</button>
+        <button type="button" class="btn js-close">Cancel</button>
       </div>
     </div>
   </div>

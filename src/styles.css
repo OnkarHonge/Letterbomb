@@ -411,6 +411,27 @@ body.is-reading-full #exit-full,
   border: 1px solid var(--accent);
   background: var(--bg-elev);
 }
+.mark-bar { z-index: 6; }
+body.is-marking .karaoke,
+body.is-marking .karaoke .word,
+body.is-marking .karaoke .word * {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+body.is-marking .block,
+body.is-marking .recital-ghost { color: inherit; }
+body.is-marking #overlay,
+body.is-marking #pause-bar,
+body.is-marking #strike {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mark-before {
+  margin: 0 0 12px;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
 
 .stage {
   position: relative;
@@ -831,7 +852,15 @@ textarea {
 .history-note { margin: 8px 0; color: var(--text); font-size: 0.9rem; }
 .history-note.is-fail { color: var(--miss); }
 .history-note .btn { margin-left: 8px; }
+.kept-list { display: flex; flex-direction: column; gap: 8px; }
+.kept-article {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
 .preset-grid[hidden],
+.kept-list[hidden],
+#kept-actions[hidden],
 .shelf-title[hidden],
 .history-note[hidden] { display: none; }
 .theme-btn.is-active, .preset.is-active, .pace-grid .btn.is-active {

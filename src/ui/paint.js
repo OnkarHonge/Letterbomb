@@ -389,6 +389,7 @@ export function createPainter() {
     reduceMotion: false,
     forceSnap: false,
     pendingReveal: null,
+    marking: false,
   };
 
   function userTookScroll() {
@@ -541,7 +542,7 @@ export function createPainter() {
     const anchor = next[0] ?? null;
     const wordChanged = anchor !== state.activeEl;
     state.activeEl = anchor;
-    if (!anchor || snap.config.viewMode !== 'karaoke') {
+    if (!anchor || (snap.config.viewMode !== 'karaoke' && !state.marking)) {
       state.layout = '';
       state.scroll = null;
       state.pendingReveal = null;
@@ -614,6 +615,16 @@ export function createPainter() {
   }
 
   function syncFace(snap, words) {
+    if (state.marking) {
+      if (state.recitalEls.length) clearRecitalFace(words);
+      if (state.faceEl) {
+        const previous = words[Number(state.faceEl.dataset.i)];
+        if (previous) fillWord(state.faceEl, previous);
+        state.faceEl = null;
+        state.faceKey = '';
+      }
+      return;
+    }
     if (syncRecitalFace(snap, words)) return;
     const el = state.activeEl;
     if (state.faceEl && state.faceEl !== el) {
@@ -725,10 +736,11 @@ export function createPainter() {
       arena.classList.add('is-struck');
     }
     state.status = snap.status;
+    state.marking = Boolean(extras?.marking);
 
     const drilling = Boolean(extras?.drill?.on);
-    karaoke.hidden = drilling || config.viewMode !== 'karaoke';
-    rsvp.hidden = drilling || config.viewMode !== 'rsvp';
+    karaoke.hidden = drilling || (config.viewMode !== 'karaoke' && !state.marking);
+    rsvp.hidden = drilling || config.viewMode !== 'rsvp' || state.marking;
     timer.hidden = drilling || !config.showTimeBar;
     ensureWindow(snap, words);
     syncFace(snap, words);
