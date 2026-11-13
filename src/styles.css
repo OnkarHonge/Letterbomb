@@ -411,6 +411,27 @@ body.is-reading-full #exit-full,
   border: 1px solid var(--accent);
   background: var(--bg-elev);
 }
+.mark-bar { z-index: 6; }
+body.is-marking .karaoke,
+body.is-marking .karaoke .word,
+body.is-marking .karaoke .word * {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+body.is-marking .block,
+body.is-marking .recital-ghost { color: inherit; }
+body.is-marking #overlay,
+body.is-marking #pause-bar,
+body.is-marking #strike {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mark-before {
+  margin: 0 0 12px;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
 
 .stage {
   position: relative;
@@ -764,14 +785,14 @@ body.is-paused .word { cursor: pointer; }
   font-size: 0.9rem;
 }
 input[type="range"] { width: 100%; height: 28px; accent-color: var(--accent); }
-select, textarea {
+select, textarea, input[type="password"], input[type="text"] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
   padding: 10px 12px;
 }
-select { min-height: 44px; }
+select, input[type="password"], input[type="text"] { min-height: 44px; }
 textarea {
   min-height: 160px;
   resize: vertical;
@@ -811,6 +832,27 @@ textarea {
   font-weight: 800;
 }
 .preset { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.kept-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.kept-row .preset { flex: 1; min-width: 0; }
+.kept-remove { flex: 0 0 auto; align-self: center; min-width: 44px; min-height: 44px; }
+.shelf-title { margin: 16px 0 8px; font-size: 0.95rem; }
+.kept-note { margin: 8px 0; color: var(--text); font-size: 0.9rem; }
+.kept-note.is-fail { color: var(--miss); }
+.kept-note .btn { margin-left: 8px; }
+.kept-list { display: flex; flex-direction: column; gap: 8px; }
+.kept-article {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.kept-list[hidden],
+#kept-actions[hidden],
+.shelf-title[hidden],
+.kept-note[hidden] { display: none; }
 .theme-btn.is-active, .preset.is-active, .pace-grid .btn.is-active {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
