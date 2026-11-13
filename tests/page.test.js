@@ -16,6 +16,7 @@ import {
   targetHud,
   wordMarks,
 } from '../src/ui/paint.js';
+import { keptHeading } from '../src/ui/library.js';
 import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
@@ -335,6 +336,29 @@ describe('page and engine', () => {
       gap: false,
       label: '',
     });
+  });
+});
+
+describe('kept lines', () => {
+  it('puts the list and the phrase with the articles, and keeps History out', () => {
+    const panel = html.slice(html.indexOf('id="modal-library"'), html.indexOf('id="modal-mark"'));
+    const order = ['preset-list', 'kept-list', 'shelf-phrase', 'article-input', 'load-article'];
+    let at = -1;
+    for (const id of order) {
+      const next = panel.indexOf(id);
+      expect(next, id).toBeGreaterThan(at);
+      at = next;
+    }
+    expect(panel).toContain('The same phrase shares kept lines.');
+    expect(panel).not.toContain('History');
+    expect(keptHeading(3)).toBe('Kept lines · 3');
+    expect(keptHeading(196)).toBe('Kept lines · 196. 4 left.');
+    expect(keptHeading(200)).toBe('Kept lines · 200. Remove one before keeping another.');
+    expect(html).toContain('id="keep-line"');
+    expect(html).toContain('id="modal-mark"');
+    expect(html).toContain('id="kept-list"');
+    expect(html).toContain('id="break-keep"');
+    expect(html).toContain('id="done-keep"');
   });
 });
 

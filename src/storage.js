@@ -1,5 +1,5 @@
 const KEY = 'reflexread.v1';
-const TEXT_LIMIT = 400_000;
+export const TEXT_LIMIT = 400_000;
 
 export function loadSave() {
   try {
