@@ -1,12 +1,12 @@
-# Builds main, beta-one, beta-two, and beta-three, then publishes one Pages site.
-# / serves main. /beta-1/ serves the beta-one branch. /beta-2/ serves the beta-two branch.
-# /beta-3/ serves the beta-three branch.
-# Keep this file on every branch. A push to any of them rebuilds all four URLs.
+# Builds main and beta-two, then publishes one Pages site.
+# / serves main. /beta-2/ serves the beta-two branch.
+# /beta-1/ and /beta-3/ redirect to /. Those features are on main.
+# Keep this file on main and on beta-two. A push to either rebuilds the site.
 name: Deploy static content to Pages
 
 on:
   push:
-    branches: ['main', 'beta-one', 'beta-two', 'beta-three']
+    branches: ['main', 'beta-two']
   workflow_dispatch:
 
 permissions:
@@ -30,21 +30,11 @@ jobs:
         with:
           ref: main
           path: main
-      - name: Checkout beta-one
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: beta-one
-          path: beta-one
       - name: Checkout beta-two
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: beta-two
           path: beta-two
-      - name: Checkout beta-three
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: beta-three
-          path: beta-three
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -54,22 +44,30 @@ jobs:
       - name: Build main
         working-directory: main
         run: npm ci && npm run build
-      - name: Build beta-one
-        working-directory: beta-one
-        run: npm ci && npm run build
       - name: Build beta-two
         working-directory: beta-two
-        run: npm ci && npm run build
-      - name: Build beta-three
-        working-directory: beta-three
         run: npm ci && npm run build
       - name: Assemble site
         run: |
           mkdir -p site/beta-1 site/beta-2 site/beta-3
           cp -a main/dist/. site/
-          cp -a beta-one/dist/. site/beta-1/
           cp -a beta-two/dist/. site/beta-2/
-          cp -a beta-three/dist/. site/beta-3/
+          cat > site/beta-1/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <title>Letterbomb</title>
+          <link rel="canonical" href="../">
+          <meta http-equiv="refresh" content="0; url=../">
+          <script>location.replace("../")</script>
+          </head>
+          <body>
+          <p><a href="../">Letterbomb</a></p>
+          </body>
+          </html>
+          EOF
+          cp site/beta-1/index.html site/beta-3/index.html
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
       - name: Upload artifact
