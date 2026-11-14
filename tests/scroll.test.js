@@ -2,16 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   MIN_PREVIEW_LINES,
   PREVIEW_INSET,
-  RECITAL_TOP_ROWS,
   SCROLL_TAKEOVER,
   advanceScroll,
   beginScroll,
   easedScrollTop,
   nextLineUnder,
-  recitalTailSpace,
   scrollEaseMs,
   scrollTopForReadingLine,
-  scrollTopForRecitalLine,
   scrollTopToReveal,
   scrollWasTaken,
 } from '../src/ui/scroll.js';
@@ -169,92 +166,6 @@ describe('scrollTopForReadingLine', () => {
       nextLineBottom: 400,
     });
     expect(next).toBe(28);
-  });
-});
-
-describe('recital reading line', () => {
-  it('puts the phrase on the second row when more than three rows fit', () => {
-    expect(RECITAL_TOP_ROWS).toBe(3);
-    expect(scrollTopForRecitalLine({
-      scrollTop: 0,
-      viewHeight: 200,
-      wordTop: 180,
-      wordHeight: 40,
-      lineHeight: 50,
-    })).toBe(130);
-  });
-
-  it('puts the phrase on the top row at three rows and at fewer', () => {
-    const shared = {
-      scrollTop: 0,
-      wordTop: 180,
-      wordHeight: 40,
-      lineHeight: 50,
-    };
-    expect(scrollTopForRecitalLine({ ...shared, viewHeight: 150 })).toBe(168);
-    expect(scrollTopForRecitalLine({ ...shared, viewHeight: 100 })).toBe(168);
-  });
-
-  it('leaves the opening line at the top', () => {
-    expect(scrollTopForRecitalLine({
-      scrollTop: 40,
-      viewHeight: 400,
-      wordTop: 8,
-      wordHeight: 40,
-      lineHeight: 50,
-    })).toBe(0);
-  });
-
-  it('moves a line that sits too low up to the second row', () => {
-    expect(scrollTopForRecitalLine({
-      scrollTop: 0,
-      viewHeight: 400,
-      wordTop: 500,
-      wordHeight: 40,
-      lineHeight: 50,
-    })).toBe(450);
-  });
-
-  it('scrolls back up when the phrase is already above the slot', () => {
-    expect(scrollTopForRecitalLine({
-      scrollTop: 400,
-      viewHeight: 400,
-      wordTop: 120,
-      wordHeight: 40,
-      lineHeight: 50,
-    })).toBe(70);
-  });
-
-  it('uses the plain reveal when the row pitch is unknown', () => {
-    expect(scrollTopForRecitalLine({
-      scrollTop: 0,
-      viewHeight: 200,
-      wordTop: 150,
-      wordHeight: 40,
-      lineHeight: 0,
-    })).toBe(scrollTopToReveal(0, 200, 150, 40, 12));
-  });
-
-  it('pads the end just enough for the last row to reach its slot', () => {
-    expect(recitalTailSpace({
-      viewHeight: 200,
-      lineHeight: 50,
-      lastTop: 400,
-      lastBottom: 440,
-    })).toBe(110);
-    expect(recitalTailSpace({
-      viewHeight: 150,
-      lineHeight: 50,
-      lastTop: 400,
-      lastBottom: 440,
-    })).toBe(98);
-    expect(recitalTailSpace({
-      viewHeight: 400,
-      lineHeight: 50,
-      lastTop: 8,
-      lastBottom: 48,
-    })).toBe(0);
-    expect(recitalTailSpace({ viewHeight: 200, lineHeight: 0, lastTop: 40, lastBottom: 80 })).toBe(0);
   });
 });
 

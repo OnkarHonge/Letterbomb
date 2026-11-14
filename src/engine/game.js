@@ -3,7 +3,6 @@ import { applyFilter, isTerminator, normalizeKey, parseText } from './parseText.
 import { blankedSentence, buildRecall, recallBounds } from './recall.js';
 import { RECALL_BONUS, pointsForHit } from './scoring.js';
 import { areaName, zoneForKey, zoneName } from './quadrant.js';
-import { pickPhrases, recitalFuseMs, recitalLookMs } from './recital.js';
 import { SPOT_REVEAL_MS, pickCue, pickSpotIds, spotLookMs } from './spot.js';
 import { wordDeadlineMs } from './timing.js';
 
@@ -57,8 +56,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   let events = [];
   let spots = new Map();
   let spotPhase = null;
-  let phraseSpans = [];
-  let recital = null;
 
   function emit(event) {
     events.push(event);
@@ -89,7 +86,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function spotLive() {
-    return config.spotCheck && config.playMode !== 'recital';
+    return config.spotCheck;
   }
 
   function isSpot(word) {
@@ -101,12 +98,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function owedKey(word) {
-    if (recital && word?.targetChar) return word.targetChar;
     return cueFor(word)?.key ?? word?.targetChar ?? null;
-  }
-
-  function spanContaining(target) {
-    return phraseSpans.find((span) => target >= span.start && target < span.end) || null;
   }
 
   function phaseDeadline(word) {
@@ -133,43 +125,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     deadlineMs = deadlineFor(words[index]);
   }
 
-  function openLook(span, at) {
-    const phraseWords = words.slice(span.start, span.end);
-    opening = Boolean(pendingOpening);
-    if (opening) pendingOpening = false;
-    const lookMs = recitalLookMs(phraseWords, config, opening);
-    recital = { start: span.start, end: span.end, phase: 'look', lookMs };
-    index = span.start;
-    status = STATUS.PLAYING;
-    responded = false;
-    missReason = null;
-    missedKey = null;
-    spotPhase = null;
-    wordStartedAt = at;
-    deadlineMs = lookMs;
-    emit({ type: 'word', index });
-  }
-
-  function enterRiff(at, cursor) {
-    reach(cursor, true);
-    index = cursor;
-    recital.phase = 'riff';
-    responded = false;
-    missReason = null;
-    missedKey = null;
-    wordStartedAt = at;
-    deadlineMs = recitalFuseMs(config);
-    emit({ type: 'word', index });
-  }
-
   function beginWord(at) {
-    const span = spanContaining(index);
-    if (config.playMode === 'recital' && span?.kind === 'phrase' && span.start === index) {
-      openLook(span, at);
-      return;
-    }
-
-    recital = null;
     status = STATUS.PLAYING;
     responded = false;
     missReason = null;
@@ -201,7 +157,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     status = STATUS.FINISHED;
     responded = false;
     spotPhase = null;
-    recital = null;
     opening = false;
     missReason = null;
     missedKey = null;
@@ -238,35 +193,8 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     return { start, end };
   }
 
-  function recitalPhrases() {
-    return phraseSpans.filter((span) => span.kind === 'phrase');
-  }
-
-  function recitalSpanAt(cursor) {
-    return recitalPhrases().find((span) => cursor >= span.start && cursor < span.end) || null;
-  }
-
-  function recitalStep(dir) {
-    const phrases = recitalPhrases();
-    if (!phrases.length) return null;
-    const current = phrases.findIndex((span) => index >= span.start && index < span.end);
-    if (dir > 0) {
-      if (current >= 0) return phrases[current + 1]?.start ?? null;
-      return phrases.find((span) => span.start > index)?.start ?? null;
-    }
-    if (current >= 0) {
-      if (index > phrases[current].start) return phrases[current].start;
-      return phrases[current - 1]?.start ?? null;
-    }
-    for (let i = phrases.length - 1; i >= 0; i -= 1) {
-      if (phrases[i].start < index) return phrases[i].start;
-    }
-    return null;
-  }
-
   function stepTarget(dir) {
     if (!words[index]) return null;
-    if (config.playMode === 'recital') return recitalStep(dir);
     const span = sentenceSpanAt(index);
     if (dir > 0) {
       const next = span.end + 1;
@@ -278,14 +206,11 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function stepLine(dir, dest) {
-    const unit = config.playMode === 'recital' ? 'phrase' : 'sentence';
-    if (dir > 0) return `Next ${unit}.`;
-    const span = config.playMode === 'recital' ? recitalSpanAt(index) : sentenceSpanAt(index);
+    if (dir > 0) return 'Next sentence.';
+    const span = sentenceSpanAt(index);
     const start = span?.start;
-    if (start === dest && dest !== index) {
-      return config.playMode === 'recital' ? 'Start of this phrase.' : 'Start of this sentence.';
-    }
-    return `Previous ${unit}.`;
+    if (start === dest && dest !== index) return 'Start of this sentence.';
+    return 'Previous sentence.';
   }
 
   function roundPlace() {
@@ -322,18 +247,9 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     freezeUntil = 0;
     if (grantOpening) pendingOpening = true;
 
-    const span = config.playMode === 'recital' ? spanContaining(index) : null;
-    const phrase = span?.kind === 'phrase' && span.start === index ? span : null;
     if (stayPaused) {
       status = STATUS.PAUSED;
-      if (phrase) {
-        const lookMs = recitalLookMs(words.slice(phrase.start, phrase.end), config, false);
-        recital = { start: phrase.start, end: phrase.end, phase: 'look', lookMs };
-        deadlineMs = lookMs;
-      } else {
-        recital = null;
-        deadlineMs = deadlineFor(words[index]);
-      }
+      deadlineMs = deadlineFor(words[index]);
       return;
     }
 
@@ -341,17 +257,12 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function advance(at) {
-    let next = index + 1;
-    if (recital?.phase === 'reveal') {
-      next = recital.end;
-      recital = null;
-    }
+    const next = index + 1;
     const from = index;
     const frontierBefore = frontier;
     reach(next, true);
     if (next >= words.length) {
       index = words.length;
-      recital = null;
       finish();
       return;
     }
@@ -363,7 +274,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       status = STATUS.BREAK;
       responded = false;
       spotPhase = null;
-      recital = null;
       opening = false;
       missReason = null;
       missedKey = null;
@@ -413,7 +323,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
       deadlineMs = SPOT_REVEAL_MS;
       return;
     }
-    if (recital) return;
     if (config.advanceOnHit) advance(at);
   }
 
@@ -462,8 +371,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     opening = false;
     pendingOpening = false;
     spotPhase = null;
-    recital = null;
-    phraseSpans = [];
     spots = new Map();
     lastPressAt = Number.NEGATIVE_INFINITY;
     epoch += 1;
@@ -483,15 +390,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     }
     if (!spotLive() && spotPhase && spotPhase !== 'reveal') spotPhase = null;
     if ((status === STATUS.PLAYING || status === STATUS.PAUSED) && words[index]) {
-      if (recital?.phase === 'look') {
-        const lookMs = recitalLookMs(words.slice(recital.start, recital.end), config, opening);
-        recital.lookMs = lookMs;
-        deadlineMs = lookMs;
-      } else if (recital?.phase === 'riff') {
-        deadlineMs = recitalFuseMs(config);
-      } else {
-        deadlineMs = phaseDeadline(words[index]);
-      }
+      deadlineMs = phaseDeadline(words[index]);
     }
     return { ...config };
   }
@@ -511,8 +410,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     lastPressAt = Number.NEGATIVE_INFINITY;
     spots = new Map();
     spotPhase = null;
-    recital = null;
-    phraseSpans = pickPhrases(words);
     if (spotLive()) fillSpots();
     emit({ type: 'start' });
     pendingOpening = true;
@@ -536,24 +433,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     }
     if (responded) {
       advance(at);
-      return true;
-    }
-    if (recital?.phase === 'riff') {
-      status = STATUS.PLAYING;
-      wordStartedAt = at;
-      deadlineMs = recitalFuseMs(config);
-      return true;
-    }
-    if (recital?.phase === 'look') {
-      status = STATUS.PLAYING;
-      if (pendingOpening) {
-        opening = true;
-        pendingOpening = false;
-      }
-      const lookMs = recitalLookMs(words.slice(recital.start, recital.end), config, opening);
-      recital.lookMs = lookMs;
-      wordStartedAt = at;
-      deadlineMs = lookMs;
       return true;
     }
     const word = words[index];
@@ -595,16 +474,14 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     if (status !== STATUS.PAUSED) return false;
     const nextIndex = Number(target);
     if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= words.length) return false;
-    const span = config.playMode === 'recital' ? spanContaining(nextIndex) : null;
-    const dest = span?.kind === 'phrase' ? span.start : nextIndex;
-    moveTo(dest, now(), { stayPaused: true, grantOpening: false });
+    moveTo(nextIndex, now(), { stayPaused: true, grantOpening: false });
     emit({ type: 'jump', index });
     return true;
   }
 
   /**
    * Left restarts the current sentence, then steps to the previous one.
-   * Right skips to the next sentence. Recital uses phrases instead.
+   * Right skips to the next sentence.
    * The landing word starts clean, with the opening pause on its first target.
    */
   function stepSentence(direction, at = now()) {
@@ -668,43 +545,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   function press(raw, at = now()) {
     if (status !== STATUS.PLAYING) return false;
     const word = words[index];
-    if (recital?.phase === 'look') {
-      if (at - wordStartedAt >= deadlineMs) return false;
-      const key = normalizeKey(raw);
-      const expected = words[recital.start]?.targetChar;
-      if (!key || key !== expected) return false;
-      if (at - lastPressAt < INPUT_LOCK_MS) return false;
-      lastPressAt = at;
-      hit(at, 0);
-      if (recital.end - recital.start <= 1) {
-        recital = null;
-        advance(at);
-      } else {
-        enterRiff(at, recital.start + 1);
-      }
-      return true;
-    }
-    if (recital?.phase === 'riff') {
-      if (at - lastPressAt < INPUT_LOCK_MS) return false;
-      if (!word?.targetChar || responded) return false;
-      if (at - wordStartedAt >= deadlineMs) return false;
-      const key = normalizeKey(raw);
-      if (!key) return false;
-      lastPressAt = at;
-      if (key === word.targetChar) {
-        hit(at);
-        if (index + 1 >= recital.end) {
-          recital = null;
-          advance(at);
-        } else {
-          enterRiff(at, index + 1);
-        }
-      } else {
-        recital.phase = 'reveal';
-        miss('wrong', at, key);
-      }
-      return true;
-    }
     if (at - lastPressAt < INPUT_LOCK_MS) return false;
     if (!word?.isTarget || responded) return false;
     if (spotPhase === 'look' || spotPhase === 'reveal') return false;
@@ -720,7 +560,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function pressArea(zone, at = now()) {
-    if (status !== STATUS.PLAYING || recital) return false;
+    if (status !== STATUS.PLAYING) return false;
     const name = zoneName(zone);
     if (!name) return false;
     const word = words[index];
@@ -754,15 +594,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
 
     if (at - wordStartedAt >= deadlineMs) {
       const word = words[index];
-      if (recital?.phase === 'look') {
-        enterRiff(at, recital.start);
-        return;
-      }
-      if (recital?.phase === 'riff') {
-        recital.phase = 'reveal';
-        miss('timeout', at, null);
-        return;
-      }
       if (spotPhase === 'look') {
         enterAnswer(at);
         return;
@@ -777,10 +608,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
   }
 
   function snapshotAnswer(word) {
-    if (recital) {
-      if (recital.phase === 'riff') return null;
-      return word?.targetChar ?? null;
-    }
     if (!word?.isTarget) return null;
     if (isSpot(word) && spotPhase) {
       if (spotPhase === 'reveal' || status === STATUS.FROZEN) return spots.get(word.id).key;
@@ -794,17 +621,6 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
     const cue = spots.get(word.id);
     if (!cue) return null;
     return { phase: spotPhase, cueIndex: cue.index };
-  }
-
-  function recitalView() {
-    if (!recital) return null;
-    return {
-      phase: recital.phase,
-      start: recital.start,
-      end: recital.end,
-      length: recital.end - recital.start,
-      place: index - recital.start + 1,
-    };
   }
 
   function snapshot(at = now()) {
@@ -846,8 +662,7 @@ export function createGame({ now = () => 0, random = Math.random } = {}) {
         : null,
       answer: snapshotAnswer(word),
       spot: spotView(word),
-      recital: recitalView(),
-      isTarget: Boolean(recital ? word?.targetChar : word?.isTarget),
+      isTarget: Boolean(word?.isTarget),
       responded,
       missReason,
       missedKey,

@@ -91,27 +91,6 @@ const keepButton = must('keep-line');
 const markBar = must('mark-bar');
 const modals = [modalSettings, modalLibrary, modalStats, modalMark];
 
-function buildKeys(chars, parent) {
-  for (const char of chars) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'key';
-    button.dataset.key = char;
-    button.textContent = char;
-    button.setAttribute('aria-label', `Press ${char}`);
-    button.addEventListener('click', () => {
-      sound.unlock();
-      game.press(char, performance.now());
-      drain();
-    });
-    button.addEventListener('pointerup', () => button.blur());
-    parent.append(button);
-  }
-}
-
-buildKeys('ABCDEFGHIJKLMNOPQRSTUVWXYZ', must('keys-letters'));
-buildKeys('0123456789', must('keys-digits'));
-
 const painter = createPainter();
 const drill = createDrill();
 const settings = bindSettings(game, { onChange: scheduleSave });
@@ -764,12 +743,6 @@ must('toggle-focus').addEventListener('click', () => {
   scheduleSave();
 });
 
-must('toggle-keypad').addEventListener('click', () => {
-  game.setConfig({ showKeypad: !game.config.showKeypad });
-  settings.sync();
-  scheduleSave();
-});
-
 must('idle-start').addEventListener('click', (event) => {
   sound.unlock();
   event.currentTarget.blur();
@@ -924,7 +897,7 @@ must('arena').addEventListener('pointerdown', (event) => {
     drain();
     return;
   }
-  if (game.config.playMode !== 'words' || game.status !== 'playing') return;
+  if (game.status !== 'playing') return;
   event.preventDefault();
   sound.unlock();
   if (game.pressArea(zone, performance.now())) drain();

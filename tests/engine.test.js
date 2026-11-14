@@ -189,9 +189,6 @@ describe('sanitizeConfig', () => {
     expect(sanitizeConfig({ spotLookMs: 5000 }).spotLookMs).toBe(800);
     expect(sanitizeConfig({ spotCheck: 'yes' }).spotCheck).toBe(false);
     expect(sanitizeConfig({}).spotCheck).toBe(false);
-    expect(sanitizeConfig({ playMode: 'recital' }).playMode).toBe('recital');
-    expect(sanitizeConfig({ playMode: 'nope' }).playMode).toBe('words');
-    expect(sanitizeConfig({}).playMode).toBe('words');
     expect(sanitizeConfig({}).endQuestion).toBe(true);
     expect(sanitizeConfig({ endQuestion: false }).endQuestion).toBe(false);
     expect(sanitizeConfig({ endQuestion: 'no' }).endQuestion).toBe(true);
@@ -205,6 +202,30 @@ describe('sanitizeConfig', () => {
       showCornerLabels: false,
       showCornerGrid: false,
     });
+  });
+
+  it('drops a saved recital and keeps the words settings', () => {
+    const saved = {
+      playMode: 'recital',
+      showKeypad: false,
+      wpm: 200,
+      spotCheck: true,
+      showCornerLabels: true,
+    };
+    const config = sanitizeConfig(saved);
+    expect(config).not.toHaveProperty('playMode');
+    expect(config).not.toHaveProperty('showKeypad');
+    expect(config).toMatchObject({
+      wpm: 200,
+      spotCheck: true,
+      showCornerLabels: true,
+    });
+    const visit = initialConfig({ touchscreen: false, saved });
+    expect(visit).not.toHaveProperty('playMode');
+    expect(visit).not.toHaveProperty('showKeypad');
+    expect(visit.wpm).toBe(200);
+    expect(visit.spotCheck).toBe(true);
+    expect(visit.showCornerLabels).toBe(true);
   });
 });
 

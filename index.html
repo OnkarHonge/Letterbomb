@@ -147,7 +147,6 @@
             <p class="hint">Space also starts, pauses, and resumes.</p>
             <p id="idle-step" class="hint">Left arrow restarts this sentence, then steps to the previous one. Right arrow skips to the next sentence. Previous and Next above the text do the same.</p>
             <p id="idle-round" class="hint"></p>
-            <p id="idle-recital" class="hint" hidden></p>
             <p id="idle-areas" class="hint">On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.</p>
             <p id="idle-spot" class="hint" hidden></p>
             <p id="idle-best" class="hint" hidden></p>
@@ -210,17 +209,6 @@
         </div>
       </div>
     </section>
-
-    <section class="keypad-dock" id="keypad-dock" aria-label="On-screen keys">
-      <div class="dock-bar">
-        <p>On-screen keys</p>
-        <button type="button" id="toggle-keypad" class="btn" aria-expanded="true">Hide keys</button>
-      </div>
-      <div id="keypad-body">
-        <div id="keys-letters" class="keypad-grid"></div>
-        <div id="keys-digits" class="digit-grid"></div>
-      </div>
-    </section>
   </div>
 
   <div id="modal-settings" class="modal-back" hidden>
@@ -234,16 +222,6 @@
       </div>
 
       <h3>How you play</h3>
-      <div class="choice">
-        <label>
-          <input type="radio" name="play" value="words" checked>
-          <span><strong>Words</strong><small>Each word asks for its first letter. On a phone, tap the corner for its group.</small></span>
-        </label>
-        <label>
-          <input type="radio" name="play" value="recital">
-          <span><strong>Recital</strong><small>A phrase stays up to read. The first letter hides it, and the rest come from memory.</small></span>
-        </label>
-      </div>
       <label class="check">
         <span><strong>Corner labels</strong><p>Names each corner. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9.</p></span>
         <input id="cfg-corner-labels" type="checkbox">
@@ -252,7 +230,6 @@
         <span><strong>Grid lines</strong><p>Draws the cross between the four corners. A tap in the middle does nothing.</p></span>
         <input id="cfg-corner-grid" type="checkbox">
       </label>
-      <p id="cfg-corner-note" class="field-help" hidden>Recital uses the letter keys. Corner labels and grid lines stay off until you switch back to Words.</p>
       <label class="field">
         <span>Which words need a key</span>
         <select id="cfg-filter">
@@ -267,7 +244,6 @@
         <span><strong>Spot check</strong><p>About one in five longer words stays readable, then turns into blocks. Press the marked one. Shorter words keep the first letter.</p></span>
         <input id="cfg-spot" type="checkbox">
       </label>
-      <p id="cfg-spot-note" class="field-help" hidden>Recital already hides the phrase. Spot check stays off until you switch back to Words.</p>
       <label class="field" id="cfg-look-field" hidden>
         <span class="field-top"><span>Look</span><b id="cfg-look-val">350 ms</b></span>
         <input id="cfg-look" type="range" min="200" max="800" step="10" value="350">
@@ -362,11 +338,7 @@
         <input id="cfg-sound" type="checkbox" checked>
       </label>
       <label class="check">
-        <span><strong>On-screen keys</strong><p>Shows the letter keys during Recital. Words uses the four corners.</p></span>
-        <input id="cfg-keypad" type="checkbox" checked>
-      </label>
-      <label class="check">
-        <span><strong>Focus mode</strong><p>Hides the extra numbers and the keys so the word is the only job.</p></span>
+        <span><strong>Focus mode</strong><p>Hides the extra numbers so the word is the only job.</p></span>
         <input id="cfg-focus" type="checkbox">
       </label>
       <label class="check">

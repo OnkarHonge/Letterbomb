@@ -25,7 +25,6 @@ export const DEFAULT_CONFIG = {
   showTargetHud: true,
   showTimeBar: true,
   reducedMotion: false,
-  showKeypad: true,
   showCornerLabels: false,
   showCornerGrid: false,
   focusMode: false,
@@ -34,7 +33,6 @@ export const DEFAULT_CONFIG = {
   endQuestion: true,
   spotCheck: false,
   spotLookMs: 350,
-  playMode: 'words',
 };
 
 /** Corner labels and grid lines start on only for a touchscreen. */
@@ -123,7 +121,6 @@ export function matchingPace(config) {
 }
 
 export const VIEW_MODES = new Set(['karaoke', 'rsvp']);
-export const PLAY_MODES = new Set(['words', 'recital']);
 export const THEMES = new Set(['signal', 'paper', 'night', 'contrast']);
 
 export function sanitizeConfig(input) {
@@ -165,12 +162,10 @@ export function sanitizeConfig(input) {
   config.showTargetHud = asBool(config.showTargetHud, DEFAULT_CONFIG.showTargetHud);
   config.showTimeBar = asBool(config.showTimeBar, DEFAULT_CONFIG.showTimeBar);
   config.reducedMotion = asBool(config.reducedMotion, DEFAULT_CONFIG.reducedMotion);
-  config.showKeypad = asBool(config.showKeypad, DEFAULT_CONFIG.showKeypad);
   config.showCornerLabels = asBool(config.showCornerLabels, DEFAULT_CONFIG.showCornerLabels);
   config.showCornerGrid = asBool(config.showCornerGrid, DEFAULT_CONFIG.showCornerGrid);
   config.focusMode = asBool(config.focusMode, DEFAULT_CONFIG.focusMode);
   config.spotCheck = asBool(config.spotCheck, DEFAULT_CONFIG.spotCheck);
-  config.playMode = PLAY_MODES.has(config.playMode) ? config.playMode : DEFAULT_CONFIG.playMode;
 
   return config;
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONFIG, LIMITS, PLAY_MODES, THEMES, VIEW_MODES } from '../src/engine/config.js';
+import { DEFAULT_CONFIG, LIMITS, THEMES, VIEW_MODES } from '../src/engine/config.js';
 import { FILTERS, LONG_WORD_LETTERS, VOWELS } from '../src/engine/parseText.js';
 import {
   RECALL_QUESTION,
@@ -9,7 +9,6 @@ import {
   missRule,
   pauseRule,
   recallHeading,
-  RECITAL_IDLE,
   recallPrompt,
   roundNote,
   stepHint,
@@ -87,7 +86,6 @@ describe('page and engine', () => {
     expect(checked('cfg-target')).toBe(DEFAULT_CONFIG.showTargetHud);
     expect(checked('cfg-bar')).toBe(DEFAULT_CONFIG.showTimeBar);
     expect(checked('cfg-sound')).toBe(DEFAULT_CONFIG.sound);
-    expect(checked('cfg-keypad')).toBe(DEFAULT_CONFIG.showKeypad);
     expect(checked('cfg-focus')).toBe(DEFAULT_CONFIG.focusMode);
     expect(checked('cfg-motion')).toBe(DEFAULT_CONFIG.reducedMotion);
     expect(checked('cfg-spot')).toBe(DEFAULT_CONFIG.spotCheck);
@@ -99,7 +97,6 @@ describe('page and engine', () => {
     expect(html).toContain('then turns into blocks');
     expect(attr(html.match(/id="toggle-sound"[^>]*>/)[0], 'aria-pressed')).toBe(String(DEFAULT_CONFIG.sound));
     expect(attr(html.match(/id="toggle-focus"[^>]*>/)[0], 'aria-pressed')).toBe(String(DEFAULT_CONFIG.focusMode));
-    expect(attr(html.match(/id="toggle-keypad"[^>]*>/)[0], 'aria-expanded')).toBe(String(DEFAULT_CONFIG.showKeypad));
   });
 
   it('keeps every slider inside the engine limits', () => {
@@ -163,18 +160,18 @@ describe('page and engine', () => {
     const checkedView = views.find((match) => /\schecked(?:[\s>]|$)/.test(match[2]));
     expect(checkedView[1]).toBe(DEFAULT_CONFIG.viewMode);
 
-    const plays = [...html.matchAll(/name="play" value="([^"]+)"([^>]*)>/g)];
-    expect(plays.map((match) => match[1])).toEqual([...PLAY_MODES]);
-    const checkedPlay = plays.find((match) => /\schecked(?:[\s>]|$)/.test(match[2]));
-    expect(checkedPlay[1]).toBe(DEFAULT_CONFIG.playMode);
-    expect(html).toContain('the rest come from memory');
-    expect(html).toContain('id="idle-recital"');
+    expect(html).not.toContain('name="play"');
+    expect(html).not.toContain('id="keypad-dock"');
+    expect(html).not.toContain('id="cfg-keypad"');
+    expect(html).not.toContain('id="idle-recital"');
+    expect(html).not.toContain('Recital');
+    expect(css).not.toContain('keypad-dock');
+    expect(css).not.toContain('recital');
     expect(html).toContain('id="quadrant-board"');
     expect(html).toContain('id="idle-areas"');
     expect(html).toContain('Top left is A–G and 0–2');
     expect(html).toContain('T–Z and 7–9');
     expect(html).toContain('A–G<br>0–2');
-    expect(html).toContain('tap the corner for its group');
     expect(html).toContain('id="enter-full"');
     expect(html).toContain('id="exit-full"');
     expect(html).toContain('id="sentence-prev"');
@@ -183,9 +180,8 @@ describe('page and engine', () => {
     expect(html).toContain('id="pause-next"');
     expect(html).toContain('id="strike-prev"');
     expect(html).toContain('id="strike-next"');
-    expect(html).toContain(stepHint('words'));
-    expect(stepHint('recital')).toContain('next phrase');
-    expect(stepHint('words')).toContain('next sentence');
+    expect(html).toContain(stepHint());
+    expect(stepHint()).toContain('next sentence');
     expect(html).toContain('id="idle-start" class="btn btn-primary btn-large btn-block"');
     expect(html).toContain('id="idle-drill" class="btn btn-block"');
     expect(html).toContain('Drill corners');
@@ -206,9 +202,6 @@ describe('page and engine', () => {
     expect(missRule(0.8)).toContain('freezes the board');
     expect(pauseRule(false)).toContain('starts fresh');
     expect(pauseRule(false, 'answer')).toContain('The blocks stay');
-    expect(pauseRule(false, 'recital-look')).toContain('This phrase starts fresh');
-    expect(pauseRule(false, 'recital-riff')).toContain('The phrase stays hidden');
-    expect(RECITAL_IDLE).toContain('from memory');
     expect(pauseRule(true)).toBe(
       'That letter already counted. Resume moves on. Click a word to move the highlight.',
     );
@@ -221,7 +214,6 @@ describe('page and engine', () => {
       'A pace sets speed, forgiveness, and how long a miss freezes. The pauses, the answer, and advance-on-hit stay as you set them.',
     );
     expect(html).toContain('id="cfg-look-field" hidden');
-    expect(html).toContain('Spot check stays off until you switch back to Words.');
     const playAt = html.indexOf('How you play');
     const labelsAt = html.indexOf('id="cfg-corner-labels"');
     const gridAt = html.indexOf('id="cfg-corner-grid"');
@@ -231,8 +223,6 @@ describe('page and engine', () => {
     expect(labelsAt).toBeLessThan(gridAt);
     expect(gridAt).toBeLessThan(filterAt);
     expect(filterAt).toBeLessThan(fastAt);
-    expect(html).toContain('id="cfg-corner-note" class="field-help" hidden');
-    expect(html).toContain('Corner labels and grid lines stay off until you switch back to Words.');
     expect(html).toContain('id="quadrant-grid"');
     expect(html).toContain('id="quadrant-labels"');
     expect(html).toContain('Question at the end');
@@ -291,24 +281,6 @@ describe('page and engine', () => {
       answer: 'D',
       spot: { phase: 'reveal', cueIndex: 3 },
     })).toEqual({ label: 'Letter', value: 'D' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: 'A',
-      recital: { phase: 'look', place: 1, length: 4 },
-    })).toEqual({ label: 'Read', value: 'A' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: null,
-      recital: { phase: 'riff', place: 2, length: 4 },
-    })).toEqual({ label: 'Recall', value: '•' });
-    expect(targetHud({
-      ...base,
-      status: 'frozen',
-      answer: 'B',
-      recital: { phase: 'reveal', place: 2, length: 4 },
-    })).toEqual({ label: 'Letter', value: 'B' });
   });
 
   it('marks a gap beat the same way in the line and in the single-word view', () => {
@@ -363,8 +335,8 @@ describe('kept lines', () => {
 });
 
 describe('corner guides', () => {
-  it('draws a label and a grid line only while Words is in play', () => {
-    const on = { playMode: 'words', showCornerLabels: true, showCornerGrid: true, active: true };
+  it('draws a label and a grid line only while a round is active', () => {
+    const on = { showCornerLabels: true, showCornerGrid: true, active: true };
     expect(cornerBoard(on)).toEqual({ board: true, labels: true, grid: true });
     expect(cornerBoard({ ...on, showCornerGrid: false })).toEqual({
       board: true,
@@ -377,7 +349,6 @@ describe('corner guides', () => {
       grid: false,
     });
     expect(cornerBoard({ ...on, active: false }).board).toBe(false);
-    expect(cornerBoard({ ...on, playMode: 'recital' }).board).toBe(false);
   });
 });
 
@@ -394,7 +365,7 @@ describe('reading full screen', () => {
   it('hides the rest of the page and keeps Exit inside the card', () => {
     expect(decl(rule('#exit-full'), 'display')).toBe('none');
     const hidden = rule(
-      'body.is-reading-full .top,\nbody.is-reading-full .hud,\nbody.is-reading-full .keypad-dock',
+      'body.is-reading-full .top,\nbody.is-reading-full .hud',
     );
     expect(decl(hidden, 'display')).toBe('none');
     const arena = rule('body.is-reading-full #arena,\n#arena:fullscreen,\n#arena:-webkit-full-screen');

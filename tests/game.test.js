@@ -4,7 +4,6 @@ import { createGame, STATUS } from '../src/engine/game.js';
 import { recallBounds, selectTarget } from '../src/engine/recall.js';
 import { RECALL_BONUS } from '../src/engine/scoring.js';
 import { SPOT_REVEAL_MS } from '../src/engine/spot.js';
-import { recitalFuseMs, recitalLookMs } from '../src/engine/recital.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
 const CLOZE = 'Bravo quietly rests. Delta gently stays. Foxtrot softly leaves. Hotel calmly waits.';
@@ -35,6 +34,21 @@ function setup(text, config = {}, random = () => 0) {
 }
 
 describe('game', () => {
+  it('keeps playing the word when an old recital save is applied', () => {
+    const game = setup('Alpha', { playMode: 'recital', showKeypad: false });
+    expect(game.config).not.toHaveProperty('playMode');
+    expect(game.config).not.toHaveProperty('showKeypad');
+    expect(game.start(0)).toBe(true);
+    expect(game.snapshot(0)).not.toHaveProperty('recital');
+    expect(game.snapshot(0)).toMatchObject({ isTarget: true, answer: 'A' });
+    expect(game.pressArea('nw', 20)).toBe(true);
+    expect(game.snapshot(20)).toMatchObject({
+      status: STATUS.FINISHED,
+      score: 100,
+      streak: 1,
+    });
+  });
+
   it('scores a correct key and moves on', () => {
     const game = setup('Alpha Beta');
     expect(game.start(0)).toBe(true);
@@ -978,28 +992,6 @@ describe('spot check', () => {
     expect(game.snapshot(400)).toMatchObject({ spot: { phase: 'answer' }, deadlineMs: 200 });
   });
 
-  it('stays off during a recital and comes back for Words', () => {
-    const recital = setup('Word Beta', { spotCheck: true, playMode: 'recital', spotLookMs: 200 });
-    recital.start(0);
-    expect(recital.snapshot(0).spot).toBeNull();
-    expect(recital.snapshot(0).recital.phase).toBe('look');
-    expect(recital.config.spotCheck).toBe(true);
-
-    const words = setup('Word Beta', { spotCheck: true, playMode: 'recital', spotLookMs: 200 });
-    words.setConfig({ playMode: 'words' });
-    words.start(0);
-    expect(words.snapshot(0).spot.phase).toBe('look');
-
-    const open = setup('Word Beta', { spotCheck: true, spotLookMs: 200 });
-    open.start(0);
-    expect(open.snapshot(0).spot.phase).toBe('look');
-    open.pause();
-    open.setConfig({ playMode: 'recital' });
-    expect(open.config.spotCheck).toBe(true);
-    open.resume(50);
-    expect(open.snapshot(50)).toMatchObject({ spot: null, answer: 'W' });
-  });
-
   it('can be turned on during a pause, and a pace leaves it alone', () => {
     const game = setup('Word Beta', { spotLookMs: 400 });
     game.setConfig({ spotCheck: true, spotLookMs: 400 });
@@ -1152,275 +1144,6 @@ describe('spot check', () => {
   });
 });
 
-describe('recital', () => {
-  const LINE = 'Alpha Beta Golf Hotel';
-  const CLOUD = 'Setting up a Google Cloud project and configuring authentication lets you call Google Cloud APIs from your applications.';
-
-  it('opens a long sentence on its first finished piece', () => {
-    const game = setup(CLOUD, { playMode: 'recital', wpm: 60 });
-    game.start(0);
-    expect(game.snapshot(0)).toMatchObject({
-      recital: { phase: 'look', start: 0, end: 9, length: 9, place: 1 },
-    });
-    pressLetters(game, 'suagcpaca');
-    expect(game.snapshot()).toMatchObject({
-      index: 9,
-      recital: { phase: 'look', start: 9, end: 18, length: 9, place: 1 },
-    });
-  });
-
-  it('reads the phrase, then hides it and takes the rest from memory', () => {
-    const game = setup(LINE, { playMode: 'recital' });
-    game.start(0);
-    expect(game.snapshot(0)).toMatchObject({
-      index: 0,
-      deadlineMs: 800,
-      answer: 'A',
-      spot: null,
-      recital: { phase: 'look', start: 0, end: 4, place: 1, length: 4 },
-    });
-    expect(game.press('z', 10)).toBe(false);
-    expect(game.press('a', 20)).toBe(true);
-    expect(game.snapshot(20)).toMatchObject({
-      index: 1,
-      deadlineMs: 200,
-      answer: null,
-      score: 100,
-      streak: 1,
-      avgReaction: 0,
-      recital: { phase: 'riff', place: 2 },
-    });
-    expect(game.press('b', 60)).toBe(true);
-    expect(game.snapshot(60).avgReaction).toBe(20);
-    expect(game.press('g', 100)).toBe(true);
-    expect(game.press('h', 140)).toBe(true);
-    expect(game.status).toBe(STATUS.FINISHED);
-    expect(game.snapshot().recital).toBeNull();
-  });
-
-  it('goes dark on its own and a miss ends the phrase', () => {
-    const game = setup(LINE, { playMode: 'recital' });
-    game.start(0);
-    game.tick(799);
-    expect(game.snapshot(799).recital.phase).toBe('look');
-    game.tick(800);
-    expect(game.snapshot(800)).toMatchObject({
-      index: 0,
-      answer: null,
-      misses: 0,
-      recital: { phase: 'riff', place: 1 },
-    });
-    game.tick(1000);
-    expect(game.snapshot(1000)).toMatchObject({
-      status: STATUS.FINISHED,
-      hits: 0,
-      misses: 1,
-      recital: null,
-    });
-  });
-
-  it('shows the owed letter and skips the rest of the phrase', () => {
-    const game = setup(LINE, { playMode: 'recital', freezeSec: 1 });
-    game.start(0);
-    game.press('a', 20);
-    expect(game.press('z', 60)).toBe(true);
-    expect(game.snapshot(60)).toMatchObject({
-      status: STATUS.FROZEN,
-      index: 1,
-      misses: 1,
-      answer: 'B',
-      missReason: 'wrong',
-      missedKey: 'Z',
-      recital: { phase: 'reveal', place: 2 },
-    });
-    game.tick(1059);
-    expect(game.status).toBe(STATUS.FROZEN);
-    game.tick(1060);
-    expect(game.snapshot(1060)).toMatchObject({
-      status: STATUS.FINISHED,
-      misses: 1,
-      hits: 1,
-    });
-  });
-
-  it('keeps a one-word phrase visible until the look runs out', () => {
-    const seen = setup('Alpha', { playMode: 'recital' });
-    seen.start(0);
-    expect(seen.press('a', 10)).toBe(true);
-    expect(seen.status).toBe(STATUS.FINISHED);
-    expect(seen.snapshot().hits).toBe(1);
-
-    const dark = setup('Alpha', { playMode: 'recital' });
-    dark.start(0);
-    dark.tick(200);
-    expect(dark.snapshot(200)).toMatchObject({ recital: { phase: 'riff', length: 1 }, answer: null });
-    expect(dark.press('a', 220)).toBe(true);
-    expect(dark.status).toBe(STATUS.FINISHED);
-  });
-
-  it('moves on a hit even when advance on a hit is off', () => {
-    const game = setup(LINE, { playMode: 'recital', advanceOnHit: false });
-    game.start(0);
-    game.press('a', 20);
-    expect(game.snapshot(20).recital.phase).toBe('riff');
-    expect(game.snapshot(20).index).toBe(1);
-  });
-
-  it('gives every word a key when the filter would skip it', () => {
-    const game = setup('to Word', { playMode: 'recital', filter: 'long' });
-    game.start(0);
-    expect(game.snapshot(0).isTarget).toBe(true);
-    expect(game.press('t', 20)).toBe(true);
-    expect(game.snapshot(20)).toMatchObject({ index: 1, recital: { phase: 'riff' }, answer: null });
-    expect(game.press('w', 60)).toBe(true);
-    expect(game.status).toBe(STATUS.FINISHED);
-  });
-
-  it('does not run a spot check', () => {
-    const game = setup('Word Beta', { playMode: 'recital', spotCheck: true, spotLookMs: 200 });
-    game.start(0);
-    expect(game.snapshot(0).spot).toBeNull();
-    expect(game.snapshot(0).recital.phase).toBe('look');
-    game.press('w', 20);
-    expect(game.snapshot(20)).toMatchObject({ recital: { phase: 'riff' }, spot: null, answer: null });
-  });
-
-  it('restarts the look, and restarts only the fuse', () => {
-    const game = setup(LINE, { playMode: 'recital' });
-    game.start(0);
-    game.tick(100);
-    game.pause();
-    game.resume(500);
-    expect(game.snapshot(500)).toMatchObject({ recital: { phase: 'look' }, deadlineMs: 800 });
-    expect(game.snapshot(500).progress).toBe(0);
-    game.press('a', 520);
-    game.pause();
-    game.resume(900);
-    expect(game.snapshot(900)).toMatchObject({
-      index: 1,
-      deadlineMs: 200,
-      recital: { phase: 'riff', place: 2 },
-      answer: null,
-    });
-    expect(game.snapshot(900).progress).toBe(0);
-  });
-
-  it('resumes a jump at the start of that phrase', () => {
-    const game = setup('Alpha Beta Golf Hotel India Juliet, Kilo Lima', { playMode: 'recital' });
-    game.start(0);
-    game.pause();
-    expect(game.jumpTo(7)).toBe(true);
-    expect(game.snapshot(0)).toMatchObject({
-      index: 6,
-      recital: { phase: 'look', start: 6, end: 8, length: 2 },
-    });
-    game.resume(40);
-    expect(game.snapshot(40).recital.phase).toBe('look');
-    expect(game.press('k', 50)).toBe(true);
-    expect(game.snapshot(50)).toMatchObject({ index: 7, recital: { phase: 'riff' } });
-  });
-
-  it('stretches the look for the opening and for punctuation, and keeps the fuse plain', () => {
-    const opened = setup(LINE, { playMode: 'recital', openingMultiplier: 2 });
-    opened.start(0);
-    expect(opened.snapshot(0).deadlineMs).toBe(1000);
-
-    const marked = setup('Alpha Beta Golf Hotel,', { playMode: 'recital', punctuationMultiplier: 2 });
-    marked.start(0);
-    expect(marked.snapshot(0).deadlineMs).toBe(1000);
-    marked.press('a', 20);
-    expect(marked.snapshot(20).deadlineMs).toBe(200);
-
-    const forgiven = setup(LINE, { playMode: 'recital', forgivenessMs: 280 });
-    forgiven.start(0);
-    forgiven.press('a', 20);
-    expect(forgiven.snapshot(20).deadlineMs).toBe(recitalFuseMs({ wpm: 600 }));
-  });
-
-  it('follows the reading speed while the phrase is up', () => {
-    const game = setup(LINE, { playMode: 'recital' });
-    game.start(0);
-    game.setConfig({ wpm: 300 });
-    expect(game.snapshot(0).deadlineMs).toBe(1600);
-  });
-
-  it('waits for a full stop before a breath, even when the phrase has ended', () => {
-    const game = setup('Alpha Beta Golf Hotel India Juliet, Kilo Lima. Mike November', {
-      playMode: 'recital',
-      roundSize: 3,
-    });
-    game.start(0);
-    game.press('a', 20);
-    game.press('b', 60);
-    game.press('g', 100);
-    game.press('h', 140);
-    game.press('i', 180);
-    game.press('j', 220);
-    expect(game.snapshot(220)).toMatchObject({ status: STATUS.PLAYING, index: 6, recital: { phase: 'look' } });
-    game.press('k', 260);
-    game.press('l', 300);
-    expect(game.snapshot(300)).toMatchObject({ status: STATUS.BREAK, index: 8, recital: null, hits: 8 });
-  });
-
-  it('finishes the phrase already up, then follows the new mode', () => {
-    const game = setup('Alpha Beta Golf Hotel India Juliet, Kilo Lima', { playMode: 'recital' });
-    game.start(0);
-    game.setConfig({ playMode: 'words' });
-    expect(game.snapshot(0).recital.phase).toBe('look');
-    game.press('a', 20);
-    expect(game.snapshot(20).recital.phase).toBe('riff');
-    game.press('b', 60);
-    game.press('g', 100);
-    game.press('h', 140);
-    game.press('i', 180);
-    game.press('j', 220);
-    expect(game.snapshot(220)).toMatchObject({ index: 6, recital: null, answer: 'K' });
-  });
-
-  it('starts at the next phrase when it is turned on mid-run', () => {
-    const game = setup('Alpha Beta Golf Hotel India Juliet, Kilo Lima');
-    game.start(0);
-    expect(game.snapshot(0).recital).toBeNull();
-    game.press('a', 20);
-    game.setConfig({ playMode: 'recital' });
-    game.press('b', 60);
-    game.press('g', 100);
-    game.press('h', 140);
-    game.press('i', 180);
-    game.press('j', 220);
-    expect(game.snapshot(220)).toMatchObject({
-      index: 6,
-      recital: { phase: 'look', start: 6, end: 8 },
-    });
-  });
-
-  it('leaves the mode alone when a pace is chosen', () => {
-    const game = setup(LINE, { playMode: 'recital' });
-    game.setConfig(pacePatch(PACE_PRESETS.linger));
-    expect(game.config.playMode).toBe('recital');
-    expect(game.config.spotCheck).toBe(false);
-  });
-
-  it('gives a covered look the opening pause', () => {
-    const game = setup('Go. Alpha Beta Golf Hotel', { playMode: 'recital', openingMultiplier: 2 });
-    game.start(0);
-    expect(game.snapshot(0).deadlineMs).toBe(400);
-    game.press('g', 20);
-    expect(game.snapshot(20)).toMatchObject({ index: 1, deadlineMs: 800, recital: { phase: 'look' } });
-    game.pause();
-    game.cover();
-    game.resume(80);
-    expect(game.snapshot(80).deadlineMs).toBe(1000);
-  });
-
-  it('accepts the folded key for an accented recital word', () => {
-    const game = setup('Éclair Beta Golf Hotel', { playMode: 'recital' });
-    game.start(0);
-    expect(game.press('é', 20)).toBe(true);
-    expect(game.snapshot(20)).toMatchObject({ recital: { phase: 'riff' }, score: 100 });
-  });
-});
-
 describe('quadrant taps', () => {
   it('scores the corner that owns the first letter and still takes a key', () => {
     const game = setup('Alpha Hotel');
@@ -1492,13 +1215,6 @@ describe('quadrant taps', () => {
     game.tick(200);
     expect(game.pressArea('ne', 220)).toBe(true);
     expect(game.snapshot(220)).toMatchObject({ score: 100, answer: '4', spot: { phase: 'reveal' } });
-  });
-
-  it('does not take a corner during recital', () => {
-    const game = setup('Alpha Beta Golf Hotel', { playMode: 'recital' });
-    game.start(0);
-    expect(game.pressArea('nw', 20)).toBe(false);
-    expect(game.snapshot(20)).toMatchObject({ score: 0, recital: { phase: 'look' } });
   });
 });
 
@@ -1693,38 +1409,5 @@ describe('sentence step', () => {
       status: STATUS.PLAYING,
     });
     expect(game.snapshot(20).word.original).toBe('Go');
-  });
-
-  it('steps recital by phrase and opens that phrase on its look', () => {
-    const game = setup('Alpha, Beta. Golf Hotel.', { playMode: 'recital', openingMultiplier: 2 });
-    game.start(0);
-    expect(game.stepSentence(1, 10)).toBe(true);
-    expect(game.snapshot(10).word.original).toBe('Beta.');
-    expect(game.snapshot(10).recital.phase).toBe('look');
-    const beta = game.words.slice(game.snapshot(10).recital.start, game.snapshot(10).recital.end);
-    expect(game.snapshot(10).deadlineMs).toBe(recitalLookMs(beta, game.config, true));
-    expect(game.snapshot(10)).toMatchObject({ score: 0, hits: 0 });
-
-    const words = setup('Alpha, Beta. Golf Hotel.');
-    words.start(0);
-    words.stepSentence(1, 10);
-    expect(words.snapshot(10).word.original).toBe('Golf');
-
-    const line = setup('Alpha Beta. Golf Hotel.', { playMode: 'recital' });
-    line.start(0);
-    line.press('a', 20);
-    expect(line.stepSentence(-1, 40)).toBe(true);
-    expect(line.consumeEvents().find((event) => event.type === 'step').line).toBe(
-      'Start of this phrase.',
-    );
-    expect(line.snapshot(40)).toMatchObject({
-      index: 0,
-      recital: { phase: 'look' },
-      score: 100,
-      streak: 1,
-    });
-    line.stepSentence(1, 60);
-    expect(line.stepSentence(1, 80)).toBe(false);
-    expect(line.snapshot(80).recital.phase).toBe('look');
   });
 });

@@ -115,7 +115,7 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 textarea, input, select { user-select: text; }
-button, .key, .word { touch-action: manipulation; }
+button, .word { touch-action: manipulation; }
 
 :focus { outline: none; }
 :focus-visible {
@@ -332,8 +332,7 @@ h3 {
 .sentence-step .btn { min-height: 36px; padding: 0 10px; font-size: 0.82rem; }
 #exit-full { display: none; flex: 0 0 auto; }
 body.is-reading-full .top,
-body.is-reading-full .hud,
-body.is-reading-full .keypad-dock { display: none; }
+body.is-reading-full .hud { display: none; }
 body.is-reading-full #app {
   width: 100%;
   max-width: none;
@@ -427,8 +426,7 @@ body.is-marking .karaoke .word * {
   -webkit-user-select: text;
   cursor: text;
 }
-body.is-marking .block,
-body.is-marking .recital-ghost { color: inherit; }
+body.is-marking .block { color: inherit; }
 body.is-marking #overlay,
 body.is-marking #pause-bar,
 body.is-marking #strike {
@@ -529,17 +527,6 @@ body.is-marking #strike {
 }
 .word.is-gap { flex-shrink: 0; }
 .first { font-weight: 700; }
-.recital-ghost {
-  color: transparent;
-  user-select: none;
-}
-.recital-count {
-  color: var(--text);
-  font-weight: 700;
-}
-.rsvp.is-recital .rsvp-current {
-  font-size: calc(clamp(1.6rem, 4vw, 2.6rem) * var(--read-scale) * var(--focus-boost));
-}
 .word.active .first {
   color: var(--accent);
   text-decoration: underline;
@@ -710,50 +697,6 @@ body.is-paused .word { cursor: pointer; }
   font: 700 1.45rem/1.1 var(--font-num);
 }
 
-.keypad-dock {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--bg-elev);
-}
-.dock-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.dock-bar p {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-#keypad-dock:has(#keypad-body[hidden]) .dock-bar { margin-bottom: 0; }
-.keypad-grid, .digit-grid { display: grid; gap: 6px; }
-.keypad-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-.digit-grid {
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  margin-top: 6px;
-}
-.key {
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-num);
-  font-weight: 800;
-}
-.key.is-hot {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-.key:active { transform: scale(0.97); }
-
 .modal-back {
   position: fixed;
   inset: 0;
@@ -900,7 +843,6 @@ textarea {
 @media (min-width: 720px) {
   .short { display: none; }
   .full { display: inline; }
-  .keypad-grid { grid-template-columns: repeat(13, minmax(0, 1fr)); }
   .modal-back { align-items: center; padding: 24px; }
   .modal { border-radius: 22px; padding: 22px; }
   .preset-grid { grid-template-columns: 1fr 1fr; }
@@ -936,13 +878,6 @@ textarea {
   .panel { padding: 14px; }
   .steps { margin: 8px 0 10px; }
   .steps li { margin: 3px 0; }
-  .keypad-dock { margin-top: 8px; padding: 8px; }
-  .keypad-grid, .digit-grid {
-    display: flex;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-  .key { flex: 0 0 auto; min-width: 44px; }
 }
 
 @media (max-height: 760px) {
@@ -954,20 +889,6 @@ textarea {
   .timer { margin: 4px 0 6px; }
   .pause-bar { padding: 6px 8px; }
   .pause-bar p { -webkit-line-clamp: 1; }
-  .keypad-dock { margin-top: 6px; padding: 6px 8px; }
-  #keypad-body {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-  }
-  .keypad-grid, .digit-grid {
-    display: flex;
-    width: max-content;
-    margin: 0;
-    overflow: visible;
-    padding: 0;
-  }
-  .key { flex: 0 0 auto; min-width: 44px; }
 }
 
 body.is-focus { --focus-boost: 1.06; }
@@ -975,7 +896,5 @@ body.is-focus .hud-extra { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .arena.is-struck { animation: none; }
-  .key:active { transform: none; }
 }
 body.reduce-motion .arena.is-struck { animation: none; }
-body.reduce-motion .key:active { transform: none; }
