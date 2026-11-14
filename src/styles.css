@@ -208,11 +208,11 @@ h3 {
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .hud {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  justify-content: flex-end;
   margin: 8px 0;
 }
+.hud .stat { min-width: 7.5rem; }
 .hud-target { grid-column: 1 / -1; }
 .stat {
   background: var(--bg-elev);
@@ -909,12 +909,7 @@ textarea {
 }
 
 @media (min-width: 840px) {
-  .hud {
-    grid-template-columns: 1fr 1fr 1.35fr 0.8fr 0.8fr;
-    align-items: stretch;
-  }
-  .hud-target { grid-column: auto; order: 0; }
-  body.is-focus .hud { grid-template-columns: 1fr 1.3fr 1fr; }
+  .hud { justify-content: flex-end; }
 }
 
 @media (max-width: 720px) {

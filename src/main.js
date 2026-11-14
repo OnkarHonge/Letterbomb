@@ -5,7 +5,7 @@
  * src/ui/paint.js draws each snapshot.
  */
 import { createSound } from './audio/sound.js';
-import { PRESETS } from './data/presets.js';
+import { PLACEHOLDER } from './data/presets.js';
 import { initialConfig } from './engine/config.js';
 import { createDrill } from './engine/drill.js';
 import { createGame } from './engine/game.js';
@@ -44,7 +44,7 @@ import {
 import { hasTouchscreen } from './ui/device.js';
 import { must, setText } from './ui/dom.js';
 import { bindLibrary } from './ui/library.js';
-import { createPainter, recallPrompt } from './ui/paint.js';
+import { createPainter } from './ui/paint.js';
 import { bindSettings } from './ui/settings.js';
 
 const saved = loadSave();
@@ -57,15 +57,21 @@ game.setConfig(initialConfig({
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 }));
 
-const fallback = PRESETS[0];
-const storedArticle = saved?.article?.text ? saved.article : null;
-let article = storedArticle
-  ? {
-      id: storedArticle.id || 'custom',
-      label: storedArticle.label || 'Custom',
-      text: storedArticle.text,
-    }
-  : { id: fallback.id, label: fallback.title, text: fallback.text };
+function usableArticle(stored) {
+  const text = String(stored?.text || '');
+  if (!countWords(text)) return null;
+  return {
+    id: stored.id || 'custom',
+    label: stored.label || 'Custom',
+    text,
+  };
+}
+
+let article = usableArticle(saved?.article) || {
+  id: PLACEHOLDER.id,
+  label: PLACEHOLDER.title,
+  text: PLACEHOLDER.text,
+};
 
 let best = {
   score: Number(saved?.best?.score) || 0,
@@ -85,11 +91,10 @@ const app = must('app');
 const live = must('live');
 const modalSettings = must('modal-settings');
 const modalLibrary = must('modal-library');
-const modalStats = must('modal-stats');
 const modalMark = must('modal-mark');
 const keepButton = must('keep-line');
 const markBar = must('mark-bar');
-const modals = [modalSettings, modalLibrary, modalStats, modalMark];
+const modals = [modalSettings, modalLibrary, modalMark];
 
 function buildKeys(chars, parent) {
   for (const char of chars) {
@@ -140,7 +145,6 @@ function render(at) {
   const liveRound = snap.status === 'playing'
     || snap.status === 'paused'
     || snap.status === 'frozen'
-    || snap.status === 'break'
     || snap.status === 'finished';
   keepButton.hidden = marking || drill.snapshot().on || !liveRound;
   markBar.hidden = !marking || !modalMark.hidden;
@@ -158,37 +162,12 @@ function handleEvent(event) {
       return;
     }
     if (!event.sentenceEnd) sound.hit(event.ascent);
-    painter.pop(`+${event.points}`, 'hit');
     rememberScore(event.score);
     if (event.maxStreak > best.streak) {
       if (best.streak > 0) records.streak = true;
       best.streak = event.maxStreak;
       scheduleSave();
     }
-    return;
-  }
-
-  if (event.type === 'recall-hit') {
-    sound.recallHit();
-    painter.pop(`+${event.points}`, 'hit');
-    rememberScore(event.score);
-    setText(live, `Caught it. Plus ${event.points}.`);
-    return;
-  }
-
-  if (event.type === 'recall-miss') {
-    sound.recallMiss();
-    setText(live, 'Not that one. The word is marked in the sentence.');
-    return;
-  }
-
-  if (event.type === 'recall-ready') {
-    setText(
-      live,
-      game.status === 'finished'
-        ? 'Article complete.'
-        : 'Round complete. Press Space to continue.',
-    );
     return;
   }
 
@@ -199,7 +178,6 @@ function handleEvent(event) {
 
   if (event.type === 'miss') {
     sound.miss();
-    painter.pop(event.reason === 'wrong' ? 'Miss' : 'Slow', 'miss');
     const answer = event.answer || '?';
     setText(live, missLine(event.reason, event.pressed, answer));
     return;
@@ -210,24 +188,11 @@ function handleEvent(event) {
     return;
   }
 
-  if (event.type === 'break') {
-    setText(
-      live,
-      event.recall
-        ? recallPrompt(false)
-        : 'Round complete. Press Space to continue.',
-    );
-    return;
-  }
-
   if (event.type === 'finish') {
     const notes = [];
     if (records.streak) notes.push('New best streak.');
     if (records.score) notes.push('New best score.');
-    const lead = event.recall
-      ? recallPrompt(true)
-      : 'Article complete.';
-    setText(live, [lead, ...notes].join(' '));
+    setText(live, ['Article complete.', ...notes].join(' '));
     scheduleSave();
     return;
   }
@@ -306,7 +271,7 @@ function loadArticle(next) {
     text,
   };
   game.load(article.text, article.label);
-  library.markActive(article.id);
+  library.setText(article.text);
   library.note('');
   closeModals();
   scheduleSave();
@@ -364,7 +329,7 @@ function canMark() {
   if (marking || modalOpen() || drill.snapshot().on) return false;
   const status = game.status;
   const liveRound = status === 'playing' || status === 'paused' || status === 'frozen'
-    || status === 'break' || status === 'finished';
+    || status === 'finished';
   return liveRound && game.words.length > 0;
 }
 
@@ -521,15 +486,16 @@ async function shareHighlight(record) {
 
 function textForKey(key) {
   if (articleKey(article.text) === key) return article;
-  const preset = PRESETS.find((item) => articleKey(item.text) === key);
-  if (!preset) return null;
-  return { id: preset.id, label: preset.title, text: preset.text };
+  if (articleKey(PLACEHOLDER.text) === key) {
+    return { id: PLACEHOLDER.id, label: PLACEHOLDER.title, text: PLACEHOLDER.text };
+  }
+  return null;
 }
 
 function openKept(item) {
   const found = textForKey(item.articleKey);
   if (!found?.text) {
-    library.setKeptNote('That line is saved here. The article is not on this device.', { failed: true });
+    library.setKeptNote('This line\'s article is not on this device.', { failed: true });
     return;
   }
   const same = articleKey(article.text) === item.articleKey;
@@ -723,14 +689,8 @@ function onSpace() {
     drain(at);
     return;
   }
-  if (game.acknowledgeRecall()) {
-    drain(at);
-    return;
-  }
-  if (game.recallLocked()) return;
   if (game.status === 'idle' || game.status === 'finished') game.start(at);
   else if (game.status === 'paused') game.resume(at);
-  else if (game.status === 'break') game.continueRound(at);
   else if (game.status === 'playing') game.pause();
   drain(at);
 }
@@ -747,10 +707,6 @@ must('open-library').addEventListener('click', (event) => {
 must('open-settings').addEventListener('click', (event) => {
   openModal(modalSettings, event.currentTarget);
 });
-must('open-stats').addEventListener('click', (event) => {
-  openModal(modalStats, event.currentTarget);
-});
-
 must('toggle-sound').addEventListener('click', () => {
   sound.unlock();
   game.setConfig({ sound: !game.config.sound });
@@ -758,9 +714,8 @@ must('toggle-sound').addEventListener('click', () => {
   scheduleSave();
 });
 
-must('toggle-focus').addEventListener('click', () => {
-  game.setConfig({ focusMode: !game.config.focusMode });
-  settings.sync();
+must('toggle-keys').addEventListener('click', () => {
+  game.setConfig({ showKeypad: !game.config.showKeypad });
   scheduleSave();
 });
 
@@ -800,7 +755,7 @@ for (const id of ['sentence-next', 'pause-next', 'strike-next']) {
   must(id).addEventListener('click', (event) => stepBy(1, event.currentTarget));
 }
 
-for (const id of ['keep-line', 'break-keep', 'done-keep']) {
+for (const id of ['keep-line', 'done-keep']) {
   must(id).addEventListener('click', (event) => {
     event.currentTarget.blur();
     beginMark();
@@ -847,13 +802,6 @@ must('kept-download').addEventListener('click', () => {
   library.setKeptNote('Downloaded kept lines.');
 });
 
-must('break-continue').addEventListener('click', (event) => {
-  sound.unlock();
-  event.currentTarget.blur();
-  game.continueRound(performance.now());
-  drain();
-});
-
 must('done-again').addEventListener('click', (event) => {
   sound.unlock();
   event.currentTarget.blur();
@@ -863,24 +811,6 @@ must('done-again').addEventListener('click', (event) => {
 
 must('done-article').addEventListener('click', (event) => {
   openModal(modalLibrary, event.currentTarget);
-});
-
-must('overlay').addEventListener('click', (event) => {
-  const choice = event.target.closest('[data-recall]');
-  if (choice) {
-    sound.unlock();
-    if (!game.answerRecall(Number(choice.dataset.recall))) return;
-    drain();
-    if (game.snapshot().recall?.phase === 'reveal') {
-      const ack = document.getElementById(game.status === 'break' ? 'break-ack' : 'done-ack');
-      ack?.focus();
-    }
-    return;
-  }
-  if (event.target.closest('.recall-ack')) {
-    sound.unlock();
-    if (game.acknowledgeRecall()) drain();
-  }
 });
 
 must('enter-full').addEventListener('click', () => {
@@ -924,7 +854,7 @@ must('arena').addEventListener('pointerdown', (event) => {
     drain();
     return;
   }
-  if (game.config.playMode !== 'words' || game.status !== 'playing') return;
+  if (game.status !== 'playing') return;
   event.preventDefault();
   sound.unlock();
   if (game.pressArea(zone, performance.now())) drain();
