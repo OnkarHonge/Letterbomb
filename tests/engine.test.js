@@ -209,10 +209,10 @@ describe('sanitizeConfig', () => {
 });
 
 describe('corner guide defaults', () => {
-  it('starts both off, and both on for a touchscreen', () => {
+  it('starts both on for a desktop and a touchscreen', () => {
     expect(configForDevice(false)).toMatchObject({
-      showCornerLabels: false,
-      showCornerGrid: false,
+      showCornerLabels: true,
+      showCornerGrid: true,
     });
     expect(configForDevice(true)).toMatchObject({
       ...DEFAULT_CONFIG,
@@ -223,7 +223,7 @@ describe('corner guide defaults', () => {
 
   it('keeps a saved off switch and fills a missing one from the device', () => {
     expect(initialConfig({ touchscreen: true }).showCornerLabels).toBe(true);
-    expect(initialConfig({ touchscreen: false }).showCornerGrid).toBe(false);
+    expect(initialConfig({ touchscreen: false }).showCornerGrid).toBe(true);
     const saved = initialConfig({
       touchscreen: true,
       saved: { wpm: 200, showCornerLabels: false },

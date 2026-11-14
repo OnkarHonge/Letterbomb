@@ -317,6 +317,43 @@ h3 {
 .quadrant-label.is-ne { top: 40px; right: 12px; }
 .quadrant-label.is-sw { bottom: 18px; left: 12px; }
 .quadrant-label.is-se { bottom: 18px; right: 12px; }
+.corner-pads {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 1fr 16% 1fr;
+  grid-template-rows: 1fr 16% 1fr;
+  pointer-events: none;
+}
+.corner-pad {
+  pointer-events: auto;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font: 800 0.78rem/1.15 var(--font);
+  letter-spacing: 0.04em;
+}
+.corner-pads.is-labeled .corner-pad { color: var(--muted); }
+.corner-pad.is-nw { grid-column: 1; grid-row: 1; }
+.corner-pad.is-ne { grid-column: 3; grid-row: 1; }
+.corner-pad.is-sw { grid-column: 1; grid-row: 3; }
+.corner-pad.is-se { grid-column: 3; grid-row: 3; }
+.corner-pad.is-hot {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.run-status {
+  display: none;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+body.is-reading-full .run-status { display: flex; }
+#run-seconds { color: var(--text); font-variant-numeric: tabular-nums; }
 
 .arena-top {
   position: relative;
@@ -443,11 +480,15 @@ body.is-marking #strike {
 
 .stage {
   position: relative;
+  z-index: 5;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* Empty card space falls through to the corner controls.
+     Words, the drill button, and the opening card opt back in. */
+  pointer-events: none;
 }
 .drill {
   position: absolute;
@@ -494,6 +535,7 @@ body.is-marking #strike {
 }
 .karaoke {
   position: relative;
+  pointer-events: none;
   overflow: auto;
   overflow-anchor: none;
   scrollbar-gutter: stable;
@@ -508,6 +550,9 @@ body.is-marking #strike {
   font-size: calc(clamp(1.28rem, 2.5vw, 1.9rem) * var(--read-scale) * var(--focus-boost));
   line-height: 1.6;
 }
+.karaoke .word,
+.overlay,
+.drill .btn { pointer-events: auto; }
 .word {
   max-width: 100%;
   padding: 0 0.12em;

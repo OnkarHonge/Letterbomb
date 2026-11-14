@@ -13,6 +13,8 @@ import {
   recallPrompt,
   roundNote,
   stepHint,
+  paceLabel,
+  secondsLeftLabel,
   targetHud,
   wordMarks,
 } from '../src/ui/paint.js';
@@ -182,6 +184,14 @@ describe('page and engine', () => {
     expect(html).toContain('id="pause-prev"');
     expect(html).toContain('id="pause-next"');
     expect(html).toContain('id="strike-prev"');
+    expect(html).toContain('id="corner-pads"');
+    expect(html).toContain('id="pause-keep-sentence"');
+    expect(html).toContain('id="done-keep-sentence"');
+    expect(html).toContain('id="run-status"');
+    expect(html).toContain('id="idle-restart"');
+    expect(paceLabel({ wpm: 150, forgivenessMs: 280, freezeSec: 0.8 })).toBe('Custom');
+    expect(secondsLeftLabel({ status: 'playing', deadlineMs: 2300, progress: 0.5 })).toBe('1.1s');
+    expect(secondsLeftLabel({ status: 'frozen', freezeLeftMs: 500 })).toBe('0.5s');
     expect(html).toContain('id="strike-next"');
     expect(html).toContain(stepHint('words'));
     expect(stepHint('recital')).toContain('next phrase');
@@ -261,6 +271,10 @@ describe('page and engine', () => {
     const word = { original: 'Word' };
     const base = { word, isTarget: true, config: { showTargetHud: true }, answer: 'W' };
     expect(targetHud({ ...base, status: 'playing' })).toEqual({ label: 'First letter', value: 'W' });
+    expect(targetHud({ ...base, status: 'playing', coach: true })).toEqual({
+      label: 'First letter',
+      value: '•',
+    });
     expect(targetHud({ ...base, status: 'playing', config: { showTargetHud: false } })).toEqual({
       label: 'First letter',
       value: '•',

@@ -66,6 +66,12 @@
     <section class="arena" id="arena" aria-label="Reading">
       <div class="arena-top">
         <p id="article-meta">Loading article</p>
+        <p id="run-status" class="run-status">
+          <span id="run-place"></span>
+          <span id="run-pace"></span>
+          <span id="run-streak"></span>
+          <span id="run-seconds"></span>
+        </p>
         <div id="sentence-step" class="sentence-step" role="group" aria-label="Move through the text" hidden>
           <button type="button" id="sentence-prev" class="btn" aria-label="Previous sentence">
             <span class="full" id="sentence-prev-label">Previous sentence</span><span class="short">Prev</span>
@@ -108,6 +114,7 @@
         <div class="banner-actions">
           <button type="button" id="pause-prev" class="btn" aria-label="Previous sentence">Prev</button>
           <button type="button" id="pause-next" class="btn" aria-label="Next sentence">Next</button>
+          <button type="button" id="pause-keep-sentence" class="btn">Keep this sentence</button>
           <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
         </div>
       </div>
@@ -142,6 +149,8 @@
               <li>Each breath fills a blank in a sentence you just read.</li>
             </ol>
             <button type="button" id="idle-start" class="btn btn-primary btn-large btn-block">Start</button>
+            <button type="button" id="idle-restart" class="btn btn-block" hidden>Start from the beginning</button>
+            <p id="idle-place" class="hint" hidden></p>
             <button type="button" id="idle-drill" class="btn btn-block">Drill corners</button>
             <p id="idle-drill-note" class="hint">One letter at a time. It stays until you tap its corner.</p>
             <p class="hint">Space also starts, pauses, and resumes.</p>
@@ -187,13 +196,20 @@
               <p id="done-note" class="record" hidden></p>
               <p id="done-result" class="record" hidden></p>
               <div class="btn-row">
-                <button type="button" id="done-again" class="btn btn-primary">Read again</button>
-                <button type="button" id="done-keep" class="btn">Keep a line</button>
+              <button type="button" id="done-again" class="btn btn-primary">Read again</button>
+              <button type="button" id="done-keep-sentence" class="btn">Keep this sentence</button>
+              <button type="button" id="done-keep" class="btn">Keep a line</button>
                 <button type="button" id="done-article" class="btn">Change article</button>
               </div>
             </div>
           </div>
         </div>
+      </div>
+      <div id="corner-pads" class="corner-pads" hidden>
+        <button type="button" class="corner-pad is-nw" data-zone="nw" aria-label="Top left, A to G and 0 to 2">A–G<br>0–2</button>
+        <button type="button" class="corner-pad is-ne" data-zone="ne" aria-label="Top right, H to M and 3 to 4">H–M<br>3–4</button>
+        <button type="button" class="corner-pad is-sw" data-zone="sw" aria-label="Bottom left, N to S and 5 to 6">N–S<br>5–6</button>
+        <button type="button" class="corner-pad is-se" data-zone="se" aria-label="Bottom right, T to Z and 7 to 9">T–Z<br>7–9</button>
       </div>
       <div id="quadrant-board" hidden>
         <div id="quadrant-grid" hidden>

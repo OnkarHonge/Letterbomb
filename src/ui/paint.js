@@ -1,3 +1,4 @@
+import { matchingPace, PACE_PRESETS } from '../engine/config.js';
 import { missLine } from '../engine/quadrant.js';
 import { cueChars, hiddenWordLabel, spotFace } from '../engine/spot.js';
 import { must, setText } from './dom.js';
@@ -12,6 +13,22 @@ import {
 } from './scroll.js';
 
 /** Which corner guides to draw. Recital and a quiet card draw neither. */
+export function paceLabel(config) {
+  const id = matchingPace(config || {});
+  return id ? PACE_PRESETS[id].label : 'Custom';
+}
+
+/** Seconds still on the clock, for the line that stays up in full screen. */
+export function secondsLeftLabel(snap) {
+  let ms = null;
+  if (snap.status === 'frozen') ms = snap.freezeLeftMs;
+  else if (snap.status === 'playing') ms = snap.deadlineMs * (1 - Number(snap.progress) || 0);
+  else if (snap.status === 'paused' && snap.deadlineMs) ms = snap.deadlineMs;
+  if (ms == null || !Number.isFinite(ms)) return '';
+  const seconds = Math.max(0, ms / 1000);
+  return seconds >= 10 ? `${Math.round(seconds)}s` : `${seconds.toFixed(1)}s`;
+}
+
 export function cornerBoard({ playMode, showCornerLabels, showCornerGrid, active }) {
   const words = playMode !== 'recital' && Boolean(active);
   const labels = Boolean(words && showCornerLabels);
@@ -86,6 +103,7 @@ export function targetHud(snap) {
     if (snap.spot.phase === 'answer' && snap.status !== 'frozen') return { label: 'Marked block', value: '•' };
     return { label: 'Letter', value: snap.answer || '—' };
   }
+  if (snap.coach && playing) return { label: 'First letter', value: '•' };
   if (!snap.config?.showTargetHud && snap.status === 'playing') {
     return { label: 'First letter', value: '•' };
   }
@@ -336,6 +354,13 @@ export function createPainter() {
   const nextButtons = [sentenceNext, must('pause-next'), must('strike-next')];
   const pauseCopy = must('pause-copy');
   const idleStart = must('idle-start');
+  const idleRestart = must('idle-restart');
+  const idlePlace = must('idle-place');
+  const cornerPads = must('corner-pads');
+  const runPlace = must('run-place');
+  const runPace = must('run-pace');
+  const runStreak = must('run-streak');
+  const runSeconds = must('run-seconds');
   const idleDrill = must('idle-drill');
   const idleDrillNote = must('idle-drill-note');
   const drillPanel = must('drill');
@@ -841,6 +866,12 @@ export function createPainter() {
     panelBreak.hidden = snap.status !== 'break';
     panelDone.hidden = snap.status !== 'finished';
     idleStart.disabled = snap.total === 0;
+    const resumeAt = Number(extras?.continueIndex) || 0;
+    const continuing = snap.status === 'idle' && resumeAt > 0 && resumeAt < snap.total;
+    setText(idleStart, continuing ? 'Continue' : 'Start');
+    idleRestart.hidden = !continuing;
+    idlePlace.hidden = !continuing;
+    if (continuing) setText(idlePlace, `Word ${resumeAt + 1} of ${snap.total}`);
 
     setText(idleRound, roundNote(config.roundSize, config.endQuestion));
     const recitalOn = config.playMode === 'recital';
@@ -862,7 +893,16 @@ export function createPainter() {
     setText(idleSpot, !recitalOn && config.spotCheck ? SPOT_IDLE : '');
     const finishedRound = snap.status === 'break' ? snap.roundWords : config.roundSize;
     const unit = config.playMode === 'recital' ? 'phrase' : 'sentence';
-    sentenceStep.hidden = drilling || snap.status !== 'playing';
+    sentenceStep.hidden = drilling || snap.status !== 'paused';
+    const placeCount = !snap.total
+      ? 0
+      : snap.status === 'finished'
+        ? Math.min(snap.index, snap.total)
+        : Math.min(snap.index + 1, snap.total);
+    setText(runPlace, snap.total ? `${placeCount} of ${snap.total}` : '');
+    setText(runPace, paceLabel(config));
+    setText(runStreak, `Streak ${snap.streak}`);
+    setText(runSeconds, secondsLeftLabel(snap));
     setText(sentencePrevLabel, `Previous ${unit}`);
     setText(sentenceNextLabel, `Next ${unit}`);
     const previousName = `Previous ${unit}`;
@@ -942,7 +982,7 @@ export function createPainter() {
     setText(statWords, String(snap.total));
     setText(statBest, String(best?.streak || 0));
 
-    const hot = config.showTargetHud && snap.answer ? snap.answer : '';
+    const hot = snap.coach ? '' : (config.showTargetHud && snap.answer ? snap.answer : '');
     if (hot !== state.hot) {
       state.hot = hot;
       for (const key of keys) key.classList.toggle('is-hot', key.dataset.key === hot);
@@ -956,6 +996,13 @@ export function createPainter() {
       showCornerGrid: config.showCornerGrid,
       active: snap.status === 'playing' || Boolean(extras?.drill?.on),
     });
+    const showPads = (snap.status === 'playing' || drilling) && config.playMode !== 'recital';
+    cornerPads.hidden = !showPads;
+    const labelPads = Boolean(showPads && (config.showCornerLabels || drilling));
+    cornerPads.classList.toggle('is-labeled', labelPads);
+    for (const pad of cornerPads.querySelectorAll('[data-zone]')) {
+      pad.classList.toggle('is-hot', pad.dataset.zone === snap.coachZone);
+    }
     quadrantBoard.hidden = !guides.board;
     quadrantGrid.hidden = !guides.grid;
     quadrantLabels.hidden = !guides.labels;

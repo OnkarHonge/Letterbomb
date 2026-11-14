@@ -37,13 +37,17 @@ export const DEFAULT_CONFIG = {
   playMode: 'words',
 };
 
-/** Corner labels and grid lines start on only for a touchscreen. */
+/**
+ * Corner labels and grid lines start on for every device.
+ * A saved off choice still wins. The touchscreen flag stays in the
+ * signature so older callers keep working.
+ */
 export function configForDevice(touchscreen) {
-  const on = Boolean(touchscreen);
+  void touchscreen;
   return {
     ...DEFAULT_CONFIG,
-    showCornerLabels: on,
-    showCornerGrid: on,
+    showCornerLabels: true,
+    showCornerGrid: true,
   };
 }
 

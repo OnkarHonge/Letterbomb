@@ -9,7 +9,7 @@ import { PRESETS } from './data/presets.js';
 import { initialConfig } from './engine/config.js';
 import { createDrill } from './engine/drill.js';
 import { createGame } from './engine/game.js';
-import { missLine, zoneAt } from './engine/quadrant.js';
+import { missLine } from './engine/quadrant.js';
 import { countWords } from './engine/parseText.js';
 import {
   HIGHLIGHT_CAP,
@@ -81,6 +81,17 @@ let pendingKeptUndo = null;
 
 game.load(article.text, article.label);
 
+function usableResume(place, text) {
+  if (!place || place.articleKey !== articleKey(text)) return 0;
+  const index = Number(place.index);
+  if (!Number.isInteger(index) || index <= 0) return 0;
+  return index;
+}
+
+let storedResume = usableResume(saved?.place, article.text);
+if (storedResume >= game.words.length) storedResume = 0;
+let placeStamp = '';
+
 const app = must('app');
 const live = must('live');
 const modalSettings = must('modal-settings');
@@ -129,7 +140,13 @@ function extras() {
   const notes = [];
   if (records.streak) notes.push('New best streak');
   if (records.score) notes.push('New best score');
-  return { best, recordNote: notes.join(' · '), drill: drill.snapshot(), marking };
+  return {
+    best,
+    recordNote: notes.join(' · '),
+    drill: drill.snapshot(),
+    marking,
+    continueIndex: game.status === 'idle' ? storedResume : 0,
+  };
 }
 
 function render(at) {
@@ -146,8 +163,20 @@ function render(at) {
   markBar.hidden = !marking || !modalMark.hidden;
 }
 
+function notePlace() {
+  const snap = game.snapshot();
+  if (snap.status === 'idle') return;
+  const index = snap.status === 'finished' ? 0 : snap.index;
+  const stamp = `${articleKey(article.text)}:${index}`;
+  if (stamp === placeStamp) return;
+  placeStamp = stamp;
+  storedResume = snap.status !== 'finished' && index > 0 ? index : 0;
+  scheduleSave();
+}
+
 function drain(at = performance.now()) {
   for (const event of game.consumeEvents()) handleEvent(event);
+  notePlace();
   render(at);
 }
 
@@ -250,7 +279,12 @@ function scheduleSave() {
 
 function persist() {
   window.clearTimeout(saveTimer);
-  const result = writeSave({ config: game.config, best, article });
+  const result = writeSave({
+    config: game.config,
+    best,
+    article,
+    place: { articleKey: articleKey(article.text), index: storedResume },
+  });
   if (!result.ok) library.note('Could not save in this browser.');
   else if (result.skippedArticle) {
     library.note('This article is too long to store. It stays loaded until you refresh.');
@@ -269,10 +303,7 @@ function clockOn() {
 function openModal(modal, opener) {
   const already = modalOpen();
   const at = performance.now();
-  if (!already) {
-    if (game.status === 'playing') game.pause();
-    else if (game.status === 'frozen') game.hold(at);
-  }
+  if (!already) game.settle();
   game.cover();
   for (const item of modals) item.hidden = item !== modal;
   app.inert = true;
@@ -287,7 +318,6 @@ function closeModals() {
   for (const modal of modals) modal.hidden = true;
   app.inert = false;
   game.release(performance.now());
-  if (marking && game.status === 'frozen') game.hold(performance.now());
   const returnTo = modalReturn;
   modalReturn = null;
   if (returnTo?.isConnected && !returnTo.closest('[hidden]')) returnTo.focus();
@@ -306,6 +336,8 @@ function loadArticle(next) {
     text,
   };
   game.load(article.text, article.label);
+  storedResume = 0;
+  placeStamp = '';
   library.markActive(article.id);
   library.note('');
   closeModals();
@@ -371,12 +403,7 @@ function canMark() {
 function beginMark() {
   if (!canMark()) return false;
   const at = performance.now();
-  if (game.status === 'playing') {
-    game.pause();
-    game.cover();
-  } else if (game.status === 'frozen') {
-    heldForMark = game.hold(at) || game.held;
-  }
+  game.settle();
   marking = true;
   window.getSelection()?.removeAllRanges();
   setText(live, 'Select the words to keep. Release to edit them.');
@@ -420,6 +447,21 @@ function offerSelection() {
   if (!marking || !modalMark.hidden) return;
   const span = selectionSpan();
   if (!span) return;
+  openDraft(span);
+}
+
+function keepSentence() {
+  if (drill.snapshot().on || modalOpen() || game.recallLocked()) return;
+  const at = performance.now();
+  game.settle();
+  if (game.status !== 'paused' && game.status !== 'break' && game.status !== 'finished') return;
+  const span = game.sentenceBounds();
+  if (!span) return;
+  openDraft(span);
+  drain(at);
+}
+
+function openDraft(span) {
   const source = spanText(game.words, span.start, span.end);
   if (!source) return;
   const key = articleKey(article.text);
@@ -773,6 +815,16 @@ must('toggle-keypad').addEventListener('click', () => {
 must('idle-start').addEventListener('click', (event) => {
   sound.unlock();
   event.currentTarget.blur();
+  const index = storedResume;
+  game.start(performance.now(), index > 0 ? { index } : undefined);
+  drain();
+});
+
+must('idle-restart').addEventListener('click', (event) => {
+  sound.unlock();
+  event.currentTarget.blur();
+  storedResume = 0;
+  placeStamp = '';
   game.start(performance.now());
   drain();
 });
@@ -798,6 +850,13 @@ for (const id of ['sentence-prev', 'pause-prev', 'strike-prev']) {
 
 for (const id of ['sentence-next', 'pause-next', 'strike-next']) {
   must(id).addEventListener('click', (event) => stepBy(1, event.currentTarget));
+}
+
+for (const id of ['pause-keep-sentence', 'done-keep-sentence']) {
+  must(id).addEventListener('click', (event) => {
+    event.currentTarget.blur();
+    keepSentence();
+  });
 }
 
 for (const id of ['keep-line', 'break-keep', 'done-keep']) {
@@ -907,16 +966,12 @@ must('drill-stop').addEventListener('click', (event) => {
 document.addEventListener('fullscreenchange', onFullscreenChange);
 document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
-must('arena').addEventListener('pointerdown', (event) => {
-  if (marking) return;
-  if (event.button > 0) return;
-  if (event.target.closest('button, a, input, textarea, select, label')) return;
-  const rect = event.currentTarget.getBoundingClientRect();
-  const zone = zoneAt(event.clientX - rect.left, event.clientY - rect.top, rect.width, rect.height);
-  if (!zone) return;
+must('corner-pads').addEventListener('click', (event) => {
+  const pad = event.target.closest('[data-zone]');
+  if (!pad) return;
+  sound.unlock();
+  const zone = pad.dataset.zone;
   if (drill.snapshot().on) {
-    event.preventDefault();
-    sound.unlock();
     const result = drill.answer(zone);
     if (!result) return;
     if (result.hit) sound.hit(1);
@@ -924,9 +979,6 @@ must('arena').addEventListener('pointerdown', (event) => {
     drain();
     return;
   }
-  if (game.config.playMode !== 'words' || game.status !== 'playing') return;
-  event.preventDefault();
-  sound.unlock();
   if (game.pressArea(zone, performance.now())) drain();
 });
 
@@ -999,8 +1051,7 @@ window.addEventListener('keydown', (event) => {
 
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     if (drill.snapshot().on) return;
-    const liveRound = game.status === 'playing' || game.status === 'paused' || game.status === 'frozen';
-    if (!liveRound) return;
+    if (game.status !== 'paused') return;
     event.preventDefault();
     if (event.repeat) return;
     stepBy(event.key === 'ArrowRight' ? 1 : -1);
@@ -1018,8 +1069,7 @@ window.addEventListener('keydown', (event) => {
 document.addEventListener('visibilitychange', () => {
   const at = performance.now();
   if (document.hidden) {
-    if (game.status === 'playing') game.pause();
-    else if (game.status === 'frozen') game.hold(at);
+    game.settle();
     persist();
     drain(at);
     return;
