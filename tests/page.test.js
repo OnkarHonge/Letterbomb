@@ -1,54 +1,26 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONFIG, LIMITS, PLAY_MODES, THEMES, VIEW_MODES } from '../src/engine/config.js';
-import { FILTERS, LONG_WORD_LETTERS, VOWELS } from '../src/engine/parseText.js';
+import { PLACEHOLDER } from '../src/data/presets.js';
+import { DEFAULT_CONFIG, PACE_PRESETS, THEMES } from '../src/engine/config.js';
+import { countWords } from '../src/engine/parseText.js';
 import {
-  RECALL_QUESTION,
   cornerBoard,
   missRule,
   pauseRule,
-  recallHeading,
-  RECITAL_IDLE,
-  recallPrompt,
-  roundNote,
   stepHint,
-  paceLabel,
-  secondsLeftLabel,
-  targetHud,
   wordMarks,
 } from '../src/ui/paint.js';
 import { keptHeading } from '../src/ui/library.js';
-import { wordWindowNote } from '../src/ui/settings.js';
 
 const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
-function tag(id) {
-  const match = html.match(new RegExp(`<input id="${id}"[^>]*>`));
-  expect(match, id).toBeTruthy();
-  return match[0];
-}
-
 function attr(source, name) {
   const match = source.match(new RegExp(`${name}="([^"]*)"`));
   expect(match, name).toBeTruthy();
   return match[1];
-}
-
-function range(id) {
-  const source = tag(id);
-  return {
-    min: Number(attr(source, 'min')),
-    max: Number(attr(source, 'max')),
-    step: Number(attr(source, 'step')),
-    value: Number(attr(source, 'value')),
-  };
-}
-
-function checked(id) {
-  return /\schecked(?:[\s>]|$)/.test(tag(id));
 }
 
 function rule(selector) {
@@ -67,265 +39,70 @@ function decl(body, property) {
 describe('page and engine', () => {
   it('opens on the same defaults the engine uses', () => {
     expect(html.slice(0, html.indexOf('<head'))).toContain(`data-theme="${DEFAULT_CONFIG.theme}"`);
-    expect(html).toContain(`id="hud-pace">${DEFAULT_CONFIG.wpm}<`);
-    expect(html).toContain(`>${DEFAULT_CONFIG.wpm} WPM<`);
-    expect(html).toContain(`>${DEFAULT_CONFIG.forgivenessMs} ms<`);
-    expect(html).toContain(`>${DEFAULT_CONFIG.freezeSec.toFixed(1)} s<`);
-    expect(html).toContain(`>${DEFAULT_CONFIG.punctuationMultiplier.toFixed(1)}×<`);
-    expect(html).toContain(`>${DEFAULT_CONFIG.roundSize} words<`);
-    expect(html).toContain(`>${Math.round(DEFAULT_CONFIG.fontScale * 100)}%<`);
+    expect(html).toContain('id="hud-streak"');
+    expect(html).not.toContain('id="hud-score"');
+    expect(html).not.toContain('id="hud-pace"');
+    expect(html).not.toContain('id="hud-accuracy"');
+    expect(html).not.toContain('id="modal-stats"');
     expect(html).toContain(missRule(DEFAULT_CONFIG.freezeSec));
     expect(html).toContain(pauseRule(false));
-    expect(html).toContain('Each breath fills a blank in a sentence you just read.');
-    expect(html.split(RECALL_QUESTION).length - 1).toBe(2);
-    expect(html).toContain(
-      '0 reads the whole article with no breath screen. Any other setting waits for a period, question mark, or exclamation mark after that many words.',
-    );
-    expect(html).toContain('Extra time on words with punctuation.');
-    expect(html).toContain('Extra time on the first word after a window closes.');
-    expect(html).toContain('plus your all-time streak');
-
-    expect(checked('cfg-advance')).toBe(DEFAULT_CONFIG.advanceOnHit);
-    expect(checked('cfg-target')).toBe(DEFAULT_CONFIG.showTargetHud);
-    expect(checked('cfg-bar')).toBe(DEFAULT_CONFIG.showTimeBar);
-    expect(checked('cfg-sound')).toBe(DEFAULT_CONFIG.sound);
-    expect(checked('cfg-keypad')).toBe(DEFAULT_CONFIG.showKeypad);
-    expect(checked('cfg-focus')).toBe(DEFAULT_CONFIG.focusMode);
-    expect(checked('cfg-motion')).toBe(DEFAULT_CONFIG.reducedMotion);
-    expect(checked('cfg-spot')).toBe(DEFAULT_CONFIG.spotCheck);
-    expect(checked('cfg-corner-labels')).toBe(DEFAULT_CONFIG.showCornerLabels);
-    expect(checked('cfg-corner-grid')).toBe(DEFAULT_CONFIG.showCornerGrid);
-    expect(checked('cfg-end-question')).toBe(DEFAULT_CONFIG.endQuestion);
-    expect(html).toContain(`>${DEFAULT_CONFIG.spotLookMs} ms<`);
-    expect(html).toContain('id="idle-spot"');
-    expect(html).toContain('then turns into blocks');
+    expect(html).toContain(stepHint());
+    expect(html).not.toContain('Each breath fills a blank');
+    expect(html).not.toContain('from memory');
     expect(attr(html.match(/id="toggle-sound"[^>]*>/)[0], 'aria-pressed')).toBe(String(DEFAULT_CONFIG.sound));
-    expect(attr(html.match(/id="toggle-focus"[^>]*>/)[0], 'aria-pressed')).toBe(String(DEFAULT_CONFIG.focusMode));
-    expect(attr(html.match(/id="toggle-keypad"[^>]*>/)[0], 'aria-expanded')).toBe(String(DEFAULT_CONFIG.showKeypad));
+    expect(attr(html.match(/id="toggle-keys"[^>]*>/)[0], 'aria-pressed')).toBe('false');
+    expect(html).toContain('id="keypad-dock"');
+    expect(html.match(/id="keypad-dock"[^>]*>/)[0]).toContain('hidden');
   });
 
-  it('keeps every slider inside the engine limits', () => {
-    expect(range('cfg-wpm')).toMatchObject({
-      min: LIMITS.wpm[0],
-      max: LIMITS.wpm[1],
-      value: DEFAULT_CONFIG.wpm,
-    });
-    expect(range('cfg-forgive')).toMatchObject({
-      min: LIMITS.forgivenessMs[0],
-      max: LIMITS.forgivenessMs[1],
-      value: DEFAULT_CONFIG.forgivenessMs,
-    });
-    expect(range('cfg-freeze')).toMatchObject({
-      min: LIMITS.freezeSec[0],
-      max: LIMITS.freezeSec[1],
-      value: DEFAULT_CONFIG.freezeSec,
-    });
-    expect(range('cfg-punct')).toMatchObject({
-      min: LIMITS.punctuationMultiplier[0],
-      max: LIMITS.punctuationMultiplier[1],
-      value: DEFAULT_CONFIG.punctuationMultiplier,
-    });
-    expect(range('cfg-opening')).toMatchObject({
-      min: LIMITS.openingMultiplier[0],
-      max: LIMITS.openingMultiplier[1],
-      value: DEFAULT_CONFIG.openingMultiplier,
-    });
-    expect(wordWindowNote(DEFAULT_CONFIG)).toBe(
-      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 880 ms. A dash, an ellipsis, or a double space gives you 133 ms.',
-    );
-    expect(wordWindowNote({ ...DEFAULT_CONFIG, openingMultiplier: 3 })).toBe(
-      'A normal word gives you 680 ms. A word with punctuation gives you 880 ms. The first word after a window gives you 1480 ms. A dash, an ellipsis, or a double space gives you 133 ms.',
-    );
-    expect(range('cfg-round')).toMatchObject({
-      min: LIMITS.roundSize[0],
-      max: LIMITS.roundSize[1],
-      value: DEFAULT_CONFIG.roundSize,
-    });
-    const font = range('cfg-font');
-    expect(font.min / 100).toBe(LIMITS.fontScale[0]);
-    expect(font.max / 100).toBe(LIMITS.fontScale[1]);
-    expect(font.value / 100).toBe(DEFAULT_CONFIG.fontScale);
-    expect(range('cfg-look')).toMatchObject({
-      min: LIMITS.spotLookMs[0],
-      max: LIMITS.spotLookMs[1],
-      value: DEFAULT_CONFIG.spotLookMs,
-    });
-  });
-
-  it('offers the same filters, views, and themes the engine accepts', () => {
-    const options = [...html.matchAll(/<option value="([^"]+)">([^<]*)<\/option>/g)];
-    expect(options.map((match) => match[1])).toEqual([...FILTERS]);
-    const labels = Object.fromEntries(options.map((match) => [match[1], match[2]]));
-    expect(labels.long).toContain(`${LONG_WORD_LETTERS} letters`);
-    for (const letter of VOWELS) expect(labels.vowel).toContain(letter);
-    expect(labels.vowel).not.toContain('Y');
-
-    const views = [...html.matchAll(/name="view" value="([^"]+)"([^>]*)>/g)];
-    expect(views.map((match) => match[1])).toEqual([...VIEW_MODES]);
-    const checkedView = views.find((match) => /\schecked(?:[\s>]|$)/.test(match[2]));
-    expect(checkedView[1]).toBe(DEFAULT_CONFIG.viewMode);
-
-    const plays = [...html.matchAll(/name="play" value="([^"]+)"([^>]*)>/g)];
-    expect(plays.map((match) => match[1])).toEqual([...PLAY_MODES]);
-    const checkedPlay = plays.find((match) => /\schecked(?:[\s>]|$)/.test(match[2]));
-    expect(checkedPlay[1]).toBe(DEFAULT_CONFIG.playMode);
-    expect(html).toContain('the rest come from memory');
-    expect(html).toContain('id="idle-recital"');
-    expect(html).toContain('id="quadrant-board"');
-    expect(html).toContain('id="idle-areas"');
-    expect(html).toContain('Top left is A–G and 0–2');
-    expect(html).toContain('T–Z and 7–9');
-    expect(html).toContain('A–G<br>0–2');
-    expect(html).toContain('tap the corner for its group');
-    expect(html).toContain('id="enter-full"');
-    expect(html).toContain('id="exit-full"');
-    expect(html).toContain('id="sentence-prev"');
-    expect(html).toContain('id="sentence-next"');
-    expect(html).toContain('id="pause-prev"');
-    expect(html).toContain('id="pause-next"');
-    expect(html).toContain('id="strike-prev"');
-    expect(html).toContain('id="corner-pads"');
-    expect(html).toContain('id="pause-keep-sentence"');
-    expect(html).toContain('id="done-keep-sentence"');
-    expect(html).toContain('id="run-status"');
-    expect(html).toContain('id="idle-restart"');
-    expect(paceLabel({ wpm: 150, forgivenessMs: 280, freezeSec: 0.8 })).toBe('Custom');
-    expect(secondsLeftLabel({ status: 'playing', deadlineMs: 2300, progress: 0.5 })).toBe('1.1s');
-    expect(secondsLeftLabel({ status: 'frozen', freezeLeftMs: 500 })).toBe('0.5s');
-    expect(html).toContain('id="strike-next"');
-    expect(html).toContain(stepHint('words'));
-    expect(stepHint('recital')).toContain('next phrase');
-    expect(stepHint('words')).toContain('next sentence');
-    expect(html).toContain('id="idle-start" class="btn btn-primary btn-large btn-block"');
-    expect(html).toContain('id="idle-drill" class="btn btn-block"');
-    expect(html).toContain('Drill corners');
-    expect(decl(rule('.overlay'), 'flex-direction')).toBe('column');
-    expect(decl(rule('.panel'), 'margin-block')).toBe('auto');
-    expect(html).toContain('id="drill-letter"');
-    expect(html).toContain('It stays until you tap its corner.');
-
+  it('offers the three paces and the four themes', () => {
+    const ids = [...html.matchAll(/data-pace="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids).toEqual(Object.keys(PACE_PRESETS));
     const themes = [...html.matchAll(/data-theme="([^"]+)" aria-pressed="(true|false)"/g)];
     expect(themes.map((match) => match[1])).toEqual([...THEMES]);
     expect(themes.filter((match) => match[2] === 'true').map((match) => match[1])).toEqual([
       DEFAULT_CONFIG.theme,
     ]);
+    expect(html).toContain('id="cfg-corner-labels"');
+    expect(html).toContain('id="cfg-corner-grid"');
+    expect(html).not.toContain('id="cfg-filter"');
+    expect(html).not.toContain('id="cfg-wpm"');
+    expect(html).not.toContain('name="play"');
+    expect(html).not.toContain('name="view"');
   });
 
   it('describes a miss and a pause the way the board behaves', () => {
     expect(missRule(0)).toBe('Hits build a streak. A miss moves straight on.');
     expect(missRule(0.8)).toContain('freezes the board');
     expect(pauseRule(false)).toContain('starts fresh');
-    expect(pauseRule(false, 'answer')).toContain('The blocks stay');
-    expect(pauseRule(false, 'recital-look')).toContain('This phrase starts fresh');
-    expect(pauseRule(false, 'recital-riff')).toContain('The phrase stays hidden');
-    expect(RECITAL_IDLE).toContain('from memory');
     expect(pauseRule(true)).toBe(
       'That letter already counted. Resume moves on. Click a word to move the highlight.',
     );
+    expect(stepHint()).toContain('next sentence');
   });
 
-  it('groups tune into play, speed, breaths, and the board', () => {
-    const headings = [...html.matchAll(/<h3>([^<]+)<\/h3>/g)].map((match) => match[1]);
-    expect(headings).toEqual(['How you play', 'How fast', 'Breaths', 'The board']);
-    expect(html).toContain(
-      'A pace sets speed, forgiveness, and how long a miss freezes. The pauses, the answer, and advance-on-hit stay as you set them.',
-    );
-    expect(html).toContain('id="cfg-look-field" hidden');
-    expect(html).toContain('Spot check stays off until you switch back to Words.');
-    const playAt = html.indexOf('How you play');
-    const labelsAt = html.indexOf('id="cfg-corner-labels"');
-    const gridAt = html.indexOf('id="cfg-corner-grid"');
-    const filterAt = html.indexOf('id="cfg-filter"');
-    const fastAt = html.indexOf('How fast');
-    expect(playAt).toBeLessThan(labelsAt);
-    expect(labelsAt).toBeLessThan(gridAt);
-    expect(gridAt).toBeLessThan(filterAt);
-    expect(filterAt).toBeLessThan(fastAt);
-    expect(html).toContain('id="cfg-corner-note" class="field-help" hidden');
-    expect(html).toContain('Corner labels and grid lines stay off until you switch back to Words.');
-    expect(html).toContain('id="quadrant-grid"');
-    expect(html).toContain('id="quadrant-labels"');
-    expect(html).toContain('Question at the end');
-    expect(html).toContain('Puts every control on this screen back to the start. The article stays.');
-    expect(html).toContain('>Reset all<');
+  it('keeps the drill, the corners, and a straight run to the end', () => {
+    expect(html).toContain('id="idle-start" class="btn btn-primary btn-large btn-block"');
+    expect(html).toContain('id="idle-drill" class="btn btn-block"');
+    expect(html).toContain('Drill corners');
+    expect(html).toContain('It stays until you tap its corner.');
+    expect(html).toContain('id="quadrant-board"');
+    expect(html).toContain('Top left is A–G and 0–2');
+    expect(html).toContain('A–G<br>0–2');
+    expect(html).toContain('id="enter-full"');
+    expect(html).toContain('id="exit-full"');
+    expect(html).toContain('id="sentence-prev"');
+    expect(html).toContain('id="sentence-next"');
+    expect(html).not.toContain('id="panel-break"');
+    expect(html).toContain('id="done-score"');
+    expect(html).toContain('id="done-streak"');
+    expect(html).toContain('id="done-best"');
+    expect(html).not.toContain('id="done-accuracy"');
+    expect(decl(rule('.overlay'), 'flex-direction')).toBe('column');
+    expect(decl(rule('.panel'), 'margin-block')).toBe('auto');
   });
 
-  it('describes a breath the way the board asks it', () => {
-    expect(roundNote(40)).toBe(
-      'A breath waits for a period, question mark, or exclamation mark after 40 words, then asks you to fill a blank from that stretch.',
-    );
-    expect(roundNote(0)).toBe(
-      'Rounds are off, so the article runs straight through. One fill-in question waits at the end.',
-    );
-    expect(roundNote(0, false)).toBe(
-      'Rounds are off, so the article runs straight through.',
-    );
-    expect(recallHeading('ask')).toBe('Which word was here?');
-    expect(recallHeading('reveal')).toBe('That word was here.');
-    expect(recallHeading('ready')).toBe('');
-    expect(recallPrompt(false)).toBe('Round complete. Which word fills the blank?');
-    expect(recallPrompt(true)).toBe('Article complete. Which word fills the blank?');
-  });
-
-  it('keeps the banner quiet during a spot check', () => {
-    const word = { original: 'Word' };
-    const base = { word, isTarget: true, config: { showTargetHud: true }, answer: 'W' };
-    expect(targetHud({ ...base, status: 'playing' })).toEqual({ label: 'First letter', value: 'W' });
-    expect(targetHud({ ...base, status: 'playing', coach: true })).toEqual({
-      label: 'First letter',
-      value: '•',
-    });
-    expect(targetHud({ ...base, status: 'playing', config: { showTargetHud: false } })).toEqual({
-      label: 'First letter',
-      value: '•',
-    });
-    expect(targetHud({ ...base, status: 'idle' })).toEqual({ label: 'Up next', value: 'W' });
-    expect(targetHud({ word, isTarget: false, status: 'playing' })).toEqual({ label: 'No key', value: '—' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: null,
-      spot: { phase: 'look', cueIndex: 3 },
-    })).toEqual({ label: 'Read', value: '•' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: null,
-      spot: { phase: 'answer', cueIndex: 3 },
-    })).toEqual({ label: 'Marked block', value: '•' });
-    expect(targetHud({
-      ...base,
-      status: 'frozen',
-      answer: 'D',
-      spot: { phase: 'answer', cueIndex: 3 },
-    })).toEqual({ label: 'Letter', value: 'D' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: 'D',
-      spot: { phase: 'reveal', cueIndex: 3 },
-    })).toEqual({ label: 'Letter', value: 'D' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: 'A',
-      recital: { phase: 'look', place: 1, length: 4 },
-    })).toEqual({ label: 'Read', value: 'A' });
-    expect(targetHud({
-      ...base,
-      status: 'playing',
-      answer: null,
-      recital: { phase: 'riff', place: 2, length: 4 },
-    })).toEqual({ label: 'Recall', value: '•' });
-    expect(targetHud({
-      ...base,
-      status: 'frozen',
-      answer: 'B',
-      recital: { phase: 'reveal', place: 2, length: 4 },
-    })).toEqual({ label: 'Letter', value: 'B' });
-  });
-
-  it('marks a gap beat the same way in the line and in the single-word view', () => {
+  it('marks a gap beat the same way in the line', () => {
     expect(wordMarks({ isTarget: true, original: 'Go' })).toEqual({
       className: 'word',
       pass: false,
@@ -353,10 +130,23 @@ describe('page and engine', () => {
   });
 });
 
+describe('placeholder article', () => {
+  it('keeps The Dopamine Engine as the only built-in article', () => {
+    expect(PLACEHOLDER).toMatchObject({
+      id: 'adhd',
+      title: 'The Dopamine Engine',
+    });
+    expect(countWords(PLACEHOLDER.text)).toBeGreaterThan(0);
+    expect(html).not.toContain('Cybernetic Odyssey');
+    expect(html).not.toContain('Quantum Entanglement');
+    expect(html).not.toContain('Stoic Wisdom');
+  });
+});
+
 describe('kept lines', () => {
   it('puts the list and the phrase with the articles, and keeps History out', () => {
     const panel = html.slice(html.indexOf('id="modal-library"'), html.indexOf('id="modal-mark"'));
-    const order = ['preset-list', 'kept-list', 'shelf-phrase', 'article-input', 'load-article'];
+    const order = ['kept-list', 'shelf-phrase', 'article-input', 'load-article'];
     let at = -1;
     for (const id of order) {
       const next = panel.indexOf(id);
@@ -365,20 +155,20 @@ describe('kept lines', () => {
     }
     expect(panel).toContain('The same phrase shares kept lines.');
     expect(panel).not.toContain('History');
+    expect(panel).not.toContain('preset-list');
     expect(keptHeading(3)).toBe('Kept lines · 3');
     expect(keptHeading(196)).toBe('Kept lines · 196. 4 left.');
     expect(keptHeading(200)).toBe('Kept lines · 200. Remove one before keeping another.');
     expect(html).toContain('id="keep-line"');
     expect(html).toContain('id="modal-mark"');
-    expect(html).toContain('id="kept-list"');
-    expect(html).toContain('id="break-keep"');
     expect(html).toContain('id="done-keep"');
+    expect(html).not.toContain('id="break-keep"');
   });
 });
 
 describe('corner guides', () => {
-  it('draws a label and a grid line only while Words is in play', () => {
-    const on = { playMode: 'words', showCornerLabels: true, showCornerGrid: true, active: true };
+  it('draws a label and a grid line only while a run is active', () => {
+    const on = { showCornerLabels: true, showCornerGrid: true, active: true };
     expect(cornerBoard(on)).toEqual({ board: true, labels: true, grid: true });
     expect(cornerBoard({ ...on, showCornerGrid: false })).toEqual({
       board: true,
@@ -391,7 +181,6 @@ describe('corner guides', () => {
       grid: false,
     });
     expect(cornerBoard({ ...on, active: false }).board).toBe(false);
-    expect(cornerBoard({ ...on, playMode: 'recital' }).board).toBe(false);
   });
 });
 

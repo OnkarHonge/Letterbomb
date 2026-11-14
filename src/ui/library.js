@@ -1,4 +1,3 @@
-import { PRESETS } from '../data/presets.js';
 import { countWords } from '../engine/parseText.js';
 import { HIGHLIGHT_CAP, groupHighlights } from '../highlights.js';
 import { normalizePhrase } from '../shelf.js';
@@ -24,7 +23,6 @@ export function keptHeading(count, cap = HIGHLIGHT_CAP) {
 }
 
 export function bindLibrary({ onLoad, onPhrase, onOpenKept, onDeleteKept }) {
-  const list = must('preset-list');
   const input = must('article-input');
   const phraseInput = must('shelf-phrase');
   const phraseToggle = must('toggle-phrase');
@@ -54,17 +52,9 @@ export function bindLibrary({ onLoad, onPhrase, onOpenKept, onDeleteKept }) {
     node.append(undo);
   }
 
-  function markActive(id) {
-    for (const button of list.querySelectorAll('.preset')) {
-      button.classList.toggle('is-active', button.dataset.preset === id);
-    }
-  }
-
   function updateCount() {
     const total = countWords(input.value);
     setText(count, `${total} ${total === 1 ? 'word' : 'words'}`);
-    const match = PRESETS.find((preset) => preset.text === input.value);
-    markActive(match?.id || '');
   }
 
   function setKept(highlights) {
@@ -107,26 +97,6 @@ export function bindLibrary({ onLoad, onPhrase, onOpenKept, onDeleteKept }) {
     }
   }
 
-  for (const preset of PRESETS) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'preset';
-    button.dataset.preset = preset.id;
-    const title = document.createElement('span');
-    title.className = 'preset-title';
-    title.textContent = preset.title;
-    const blurb = document.createElement('span');
-    blurb.className = 'preset-blurb';
-    blurb.textContent = preset.blurb;
-    button.append(title, blurb);
-    button.addEventListener('click', () => {
-      input.value = preset.text;
-      updateCount();
-      onLoad({ id: preset.id, label: preset.title, text: preset.text });
-    });
-    list.append(button);
-  }
-
   input.addEventListener('input', updateCount);
   phraseToggle.addEventListener('click', () => {
     const showing = phraseInput.type === 'text';
@@ -156,7 +126,6 @@ export function bindLibrary({ onLoad, onPhrase, onOpenKept, onDeleteKept }) {
       input.value = text;
       updateCount();
     },
-    markActive,
     setPhrase(value) {
       phraseInput.value = value || '';
     },

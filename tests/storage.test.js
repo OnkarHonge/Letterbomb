@@ -31,25 +31,7 @@ describe('storage', () => {
       config: { wpm: 180 },
       best: { score: 400, streak: 4 },
       article,
-      place: null,
     });
-  });
-
-  it('stores a word to continue, and drops a place with no article', () => {
-    writeSave({
-      config: { wpm: 150 },
-      best: { score: 0, streak: 0 },
-      article: { id: 'custom', label: 'Notes', text: 'Read this closely.' },
-      place: { articleKey: 'abc', index: 4 },
-    });
-    expect(loadSave().place).toEqual({ articleKey: 'abc', index: 4 });
-    writeSave({
-      config: { wpm: 150 },
-      best: { score: 0, streak: 0 },
-      article: { id: 'custom', label: 'Notes', text: 'Read this closely.' },
-      place: { index: 4 },
-    });
-    expect(loadSave().place).toBeNull();
   });
 
   it('keeps the previous article when the new one is too large to store', () => {

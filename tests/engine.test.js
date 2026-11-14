@@ -179,22 +179,13 @@ describe('sanitizeConfig', () => {
       theme: 'signal',
       sound: true,
     });
-    expect(sanitizeConfig({ wpm: 9000, roundSize: 0, fontScale: 2 }).wpm).toBe(800);
-    expect(sanitizeConfig({ roundSize: 0 }).roundSize).toBe(0);
-    expect(sanitizeConfig({ viewMode: 'nope' }).viewMode).toBe('karaoke');
+    expect(sanitizeConfig({ wpm: 9000 }).wpm).toBe(800);
     expect(sanitizeConfig({ openingMultiplier: 9 }).openingMultiplier).toBe(3);
     expect(sanitizeConfig({ openingMultiplier: 0 }).openingMultiplier).toBe(1);
     expect(sanitizeConfig({ wpm: 150 }).openingMultiplier).toBe(DEFAULT_CONFIG.openingMultiplier);
-    expect(sanitizeConfig({ spotLookMs: 10 }).spotLookMs).toBe(200);
-    expect(sanitizeConfig({ spotLookMs: 5000 }).spotLookMs).toBe(800);
-    expect(sanitizeConfig({ spotCheck: 'yes' }).spotCheck).toBe(false);
-    expect(sanitizeConfig({}).spotCheck).toBe(false);
-    expect(sanitizeConfig({ playMode: 'recital' }).playMode).toBe('recital');
-    expect(sanitizeConfig({ playMode: 'nope' }).playMode).toBe('words');
-    expect(sanitizeConfig({}).playMode).toBe('words');
-    expect(sanitizeConfig({}).endQuestion).toBe(true);
-    expect(sanitizeConfig({ endQuestion: false }).endQuestion).toBe(false);
-    expect(sanitizeConfig({ endQuestion: 'no' }).endQuestion).toBe(true);
+    expect(sanitizeConfig({ showKeypad: true }).showKeypad).toBe(true);
+    expect(sanitizeConfig({}).showKeypad).toBe(false);
+    expect(sanitizeConfig({ theme: 'night' }).theme).toBe('night');
     expect(sanitizeConfig({}).showCornerLabels).toBe(false);
     expect(sanitizeConfig({}).showCornerGrid).toBe(false);
     expect(sanitizeConfig({ showCornerLabels: true, showCornerGrid: true })).toMatchObject({
@@ -209,10 +200,10 @@ describe('sanitizeConfig', () => {
 });
 
 describe('corner guide defaults', () => {
-  it('starts both on for a desktop and a touchscreen', () => {
+  it('starts both off, and both on for a touchscreen', () => {
     expect(configForDevice(false)).toMatchObject({
-      showCornerLabels: true,
-      showCornerGrid: true,
+      showCornerLabels: false,
+      showCornerGrid: false,
     });
     expect(configForDevice(true)).toMatchObject({
       ...DEFAULT_CONFIG,
@@ -223,7 +214,7 @@ describe('corner guide defaults', () => {
 
   it('keeps a saved off switch and fills a missing one from the device', () => {
     expect(initialConfig({ touchscreen: true }).showCornerLabels).toBe(true);
-    expect(initialConfig({ touchscreen: false }).showCornerGrid).toBe(true);
+    expect(initialConfig({ touchscreen: false }).showCornerGrid).toBe(false);
     const saved = initialConfig({
       touchscreen: true,
       saved: { wpm: 200, showCornerLabels: false },
@@ -237,6 +228,11 @@ describe('corner guide defaults', () => {
       touchscreen: true,
       saved: { reducedMotion: false },
       reducedMotion: true,
-    }).reducedMotion).toBe(false);
+    }).reducedMotion).toBe(true);
+    expect(initialConfig({
+      touchscreen: false,
+      saved: { wpm: 150, forgivenessMs: 280, freezeSec: 0.8 },
+    })).toMatchObject({ wpm: 150, forgivenessMs: 280, freezeSec: 0.8 });
+    expect(initialConfig({ touchscreen: false }).wpm).toBe(10);
   });
 });

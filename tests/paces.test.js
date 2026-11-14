@@ -4,16 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, LIMITS, PACE_PRESETS, matchingPace, pacePatch, sanitizeConfig } from '../src/engine/config.js';
 import { wordDeadlineMs } from '../src/engine/timing.js';
 
-const ORDER = ['linger', 'study', 'read', 'warmup', 'flow', 'reflex'];
+const ORDER = ['linger', 'study', 'read'];
 
 // Time a target word stays up at the default 1.5× punctuation pause.
 const WINDOWS_MS = {
   linger: { plain: 6800, punctuated: 9800 },
   study: { plain: 3800, punctuated: 5300 },
   read: { plain: 2300, punctuated: 3050 },
-  warmup: { plain: 1457, punctuated: 1886 },
-  flow: { plain: 965, punctuated: 1238 },
-  reflex: { plain: 593, punctuated: 769 },
 };
 
 function windowMs(id, hasPunctuation) {
@@ -21,16 +18,9 @@ function windowMs(id, hasPunctuation) {
 }
 
 describe('pace presets', () => {
-  it('lists the paces from a first reading down to Reflex', () => {
+  it('lists Linger, Study, and Read', () => {
     expect(Object.keys(PACE_PRESETS)).toEqual(ORDER);
-    expect(ORDER.map((id) => PACE_PRESETS[id].label)).toEqual([
-      'Linger',
-      'Study',
-      'Read',
-      'Warmup',
-      'Flow',
-      'Reflex',
-    ]);
+    expect(ORDER.map((id) => PACE_PRESETS[id].label)).toEqual(['Linger', 'Study', 'Read']);
   });
 
   it('gives each pace less time than the one before it', () => {
@@ -65,7 +55,8 @@ describe('pace presets', () => {
   });
 
   it('matches a pace only when every field it writes is current', () => {
-    expect(matchingPace(DEFAULT_CONFIG)).toBeNull();
+    expect(matchingPace(DEFAULT_CONFIG)).toBe('linger');
+    expect(matchingPace({ ...DEFAULT_CONFIG, wpm: 150, forgivenessMs: 280, freezeSec: 0.8 })).toBeNull();
     for (const id of ORDER) {
       const config = sanitizeConfig(pacePatch(PACE_PRESETS[id]));
       expect(matchingPace(config)).toBe(id);
@@ -89,19 +80,6 @@ describe('pace presets', () => {
 describe('Tune pace controls', () => {
   const html = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 
-  function range(id) {
-    const tag = html.match(new RegExp(`<input id="${id}"[^>]*>`));
-    const attr = (name) => Number(tag[0].match(new RegExp(`${name}="([^"]+)"`))[1]);
-    return { min: attr('min'), max: attr('max'), step: attr('step') };
-  }
-
-  function landsOn(value, slider) {
-    expect(value).toBeGreaterThanOrEqual(slider.min);
-    expect(value).toBeLessThanOrEqual(slider.max);
-    const steps = (value - slider.min) / slider.step;
-    expect(steps).toBeCloseTo(Math.round(steps));
-  }
-
   it('offers the paces in the same order as the presets', () => {
     const ids = [...html.matchAll(/data-pace="([^"]+)"/g)].map((match) => match[1]);
     expect(ids).toEqual(ORDER);
@@ -112,22 +90,14 @@ describe('Tune pace controls', () => {
     }
   });
 
-  it('lets every pace land on the speed, forgiveness, and freeze sliders', () => {
-    const speed = range('cfg-wpm');
-    const forgiveness = range('cfg-forgive');
-    const freeze = range('cfg-freeze');
-    expect(speed).toEqual({ min: LIMITS.wpm[0], max: LIMITS.wpm[1], step: 10 });
-    expect(forgiveness).toEqual({
-      min: LIMITS.forgivenessMs[0],
-      max: LIMITS.forgivenessMs[1],
-      step: 10,
-    });
-    expect(freeze).toEqual({ min: LIMITS.freezeSec[0], max: LIMITS.freezeSec[1], step: 0.1 });
-
+  it('keeps every pace inside the speed limits', () => {
     for (const preset of Object.values(PACE_PRESETS)) {
-      landsOn(preset.wpm, speed);
-      landsOn(preset.forgivenessMs, forgiveness);
-      landsOn(preset.freezeSec, freeze);
+      expect(preset.wpm).toBeGreaterThanOrEqual(LIMITS.wpm[0]);
+      expect(preset.wpm).toBeLessThanOrEqual(LIMITS.wpm[1]);
+      expect(preset.forgivenessMs).toBeGreaterThanOrEqual(LIMITS.forgivenessMs[0]);
+      expect(preset.forgivenessMs).toBeLessThanOrEqual(LIMITS.forgivenessMs[1]);
+      expect(preset.freezeSec).toBeGreaterThanOrEqual(LIMITS.freezeSec[0]);
+      expect(preset.freezeSec).toBeLessThanOrEqual(LIMITS.freezeSec[1]);
     }
   });
 });

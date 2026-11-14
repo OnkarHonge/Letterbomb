@@ -1,67 +1,51 @@
-import { FILTERS } from './parseText.js';
-
 export const LIMITS = {
   wpm: [10, 800],
   forgivenessMs: [0, 800],
   freezeSec: [0, 3],
   punctuationMultiplier: [1, 3],
   openingMultiplier: [1, 3],
-  fontScale: [0.85, 1.6],
-  roundSize: [0, 200],
-  spotLookMs: [200, 800],
 };
 
 export const DEFAULT_CONFIG = {
-  wpm: 150,
-  forgivenessMs: 280,
-  freezeSec: 0.8,
+  wpm: 10,
+  forgivenessMs: 800,
+  freezeSec: 0.5,
   punctuationMultiplier: 1.5,
   openingMultiplier: 1.5,
-  viewMode: 'karaoke',
-  filter: 'all',
   sound: true,
   theme: 'signal',
-  advanceOnHit: true,
-  showTargetHud: true,
-  showTimeBar: true,
   reducedMotion: false,
-  showKeypad: true,
+  showKeypad: false,
   showCornerLabels: false,
   showCornerGrid: false,
-  focusMode: false,
-  fontScale: 1,
-  roundSize: 40,
-  endQuestion: true,
-  spotCheck: false,
-  spotLookMs: 350,
-  playMode: 'words',
 };
 
-/**
- * Corner labels and grid lines start on for every device.
- * A saved off choice still wins. The touchscreen flag stays in the
- * signature so older callers keep working.
- */
+/** Corner labels and grid lines start on only for a touchscreen. */
 export function configForDevice(touchscreen) {
-  void touchscreen;
+  const on = Boolean(touchscreen);
   return {
     ...DEFAULT_CONFIG,
-    showCornerLabels: true,
-    showCornerGrid: true,
+    showCornerLabels: on,
+    showCornerGrid: on,
   };
 }
 
 /**
  * The config a visit starts from.
- * A saved choice wins, including an explicit off.
+ * A saved speed wins, including an old pace that no longer has a button.
+ * Punctuation and the opening stretch stay at 1.5×.
+ * Reduced motion follows the system setting on this visit.
  * A missing corner switch takes the device default.
- * Reduced motion applies only when nothing is saved.
  */
 export function initialConfig({ touchscreen = false, saved, reducedMotion = false } = {}) {
   const base = configForDevice(touchscreen);
-  if (saved && typeof saved === 'object') return sanitizeConfig({ ...base, ...saved });
-  if (reducedMotion) return sanitizeConfig({ ...base, reducedMotion: true });
-  return sanitizeConfig(base);
+  const config = sanitizeConfig(
+    saved && typeof saved === 'object' ? { ...base, ...saved } : base,
+  );
+  config.punctuationMultiplier = DEFAULT_CONFIG.punctuationMultiplier;
+  config.openingMultiplier = DEFAULT_CONFIG.openingMultiplier;
+  config.reducedMotion = Boolean(reducedMotion);
+  return config;
 }
 
 export const PACE_PRESETS = {
@@ -83,31 +67,13 @@ export const PACE_PRESETS = {
     forgivenessMs: 800,
     freezeSec: 0.5,
   },
-  warmup: {
-    label: 'Warmup',
-    wpm: 70,
-    forgivenessMs: 600,
-    freezeSec: 0.5,
-  },
-  flow: {
-    label: 'Flow',
-    wpm: 110,
-    forgivenessMs: 420,
-    freezeSec: 0.5,
-  },
-  reflex: {
-    label: 'Reflex',
-    wpm: 170,
-    forgivenessMs: 240,
-    freezeSec: 0.8,
-  },
 };
 
 const PACE_KEYS = ['wpm', 'forgivenessMs', 'freezeSec'];
 
 /**
  * Values a Tune pace button writes: speed, forgiveness, and the miss freeze.
- * The answer, advance-on-hit, and the pauses stay as the player set them.
+ * The punctuation stretch and the opening stretch stay as they are.
  */
 export function pacePatch(preset) {
   const patch = {};
@@ -117,7 +83,7 @@ export function pacePatch(preset) {
   return patch;
 }
 
-/** The pace whose written fields all match, or null once the sliders have drifted. */
+/** The pace whose written fields all match, or null once the speed has drifted. */
 export function matchingPace(config) {
   const found = Object.keys(PACE_PRESETS).filter((id) => {
     const patch = pacePatch(PACE_PRESETS[id]);
@@ -126,8 +92,6 @@ export function matchingPace(config) {
   return found.length === 1 ? found[0] : null;
 }
 
-export const VIEW_MODES = new Set(['karaoke', 'rsvp']);
-export const PLAY_MODES = new Set(['words', 'recital']);
 export const THEMES = new Set(['signal', 'paper', 'night', 'contrast']);
 
 export function sanitizeConfig(input) {
@@ -157,24 +121,12 @@ export function sanitizeConfig(input) {
     DEFAULT_CONFIG.openingMultiplier,
     1,
   );
-  config.fontScale = clampNum(config.fontScale, LIMITS.fontScale, DEFAULT_CONFIG.fontScale, 2);
-  config.roundSize = clampInt(config.roundSize, LIMITS.roundSize, DEFAULT_CONFIG.roundSize);
-  config.endQuestion = asBool(config.endQuestion, DEFAULT_CONFIG.endQuestion);
-  config.spotLookMs = clampInt(config.spotLookMs, LIMITS.spotLookMs, DEFAULT_CONFIG.spotLookMs);
-  config.viewMode = VIEW_MODES.has(config.viewMode) ? config.viewMode : DEFAULT_CONFIG.viewMode;
-  config.filter = FILTERS.has(config.filter) ? config.filter : DEFAULT_CONFIG.filter;
   config.theme = THEMES.has(config.theme) ? config.theme : DEFAULT_CONFIG.theme;
   config.sound = asBool(config.sound, DEFAULT_CONFIG.sound);
-  config.advanceOnHit = asBool(config.advanceOnHit, DEFAULT_CONFIG.advanceOnHit);
-  config.showTargetHud = asBool(config.showTargetHud, DEFAULT_CONFIG.showTargetHud);
-  config.showTimeBar = asBool(config.showTimeBar, DEFAULT_CONFIG.showTimeBar);
   config.reducedMotion = asBool(config.reducedMotion, DEFAULT_CONFIG.reducedMotion);
   config.showKeypad = asBool(config.showKeypad, DEFAULT_CONFIG.showKeypad);
   config.showCornerLabels = asBool(config.showCornerLabels, DEFAULT_CONFIG.showCornerLabels);
   config.showCornerGrid = asBool(config.showCornerGrid, DEFAULT_CONFIG.showCornerGrid);
-  config.focusMode = asBool(config.focusMode, DEFAULT_CONFIG.focusMode);
-  config.spotCheck = asBool(config.spotCheck, DEFAULT_CONFIG.spotCheck);
-  config.playMode = PLAY_MODES.has(config.playMode) ? config.playMode : DEFAULT_CONFIG.playMode;
 
   return config;
 }

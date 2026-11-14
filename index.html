@@ -24,14 +24,11 @@
         <button type="button" id="open-settings" class="btn" aria-label="Tune">
           <span class="full">Tune</span><span class="short">Tune</span>
         </button>
-        <button type="button" id="open-stats" class="btn" aria-label="Stats">
-          <span class="full">Stats</span><span class="short">Stats</span>
+        <button type="button" id="toggle-keys" class="btn" aria-pressed="false" aria-label="Keys">
+          <span class="full">Keys</span><span class="short">Keys</span>
         </button>
         <button type="button" id="toggle-sound" class="btn" aria-pressed="true">
           <span class="full">Sound on</span><span class="short">Snd</span>
-        </button>
-        <button type="button" id="toggle-focus" class="btn" aria-pressed="false">
-          <span class="full">Focus</span><span class="short">Focus</span>
         </button>
         <button type="button" id="enter-full" class="btn" aria-label="Full screen">
           <span class="full">Full screen</span><span class="short">Full</span>
@@ -40,38 +37,15 @@
     </header>
 
     <section class="hud" aria-label="Session">
-      <div class="stat hud-target">
-        <span id="hud-target-label">Up next</span>
-        <b id="hud-target" class="target-key">—</b>
-        <span id="hud-pop" class="hud-pop"></span>
-      </div>
       <div class="stat">
         <span>Streak</span>
         <b id="hud-streak">0</b>
-      </div>
-      <div class="stat">
-        <span>Score</span>
-        <b id="hud-score">0</b>
-      </div>
-      <div class="stat hud-extra">
-        <span>WPM</span>
-        <b id="hud-pace">150</b>
-      </div>
-      <div class="stat hud-extra">
-        <span>Accuracy</span>
-        <b id="hud-accuracy">—</b>
       </div>
     </section>
 
     <section class="arena" id="arena" aria-label="Reading">
       <div class="arena-top">
         <p id="article-meta">Loading article</p>
-        <p id="run-status" class="run-status">
-          <span id="run-place"></span>
-          <span id="run-pace"></span>
-          <span id="run-streak"></span>
-          <span id="run-seconds"></span>
-        </p>
         <div id="sentence-step" class="sentence-step" role="group" aria-label="Move through the text" hidden>
           <button type="button" id="sentence-prev" class="btn" aria-label="Previous sentence">
             <span class="full" id="sentence-prev-label">Previous sentence</span><span class="short">Prev</span>
@@ -80,7 +54,6 @@
             <span class="full" id="sentence-next-label">Next sentence</span><span class="short">Next</span>
           </button>
         </div>
-        <p id="round-meta"></p>
         <button type="button" id="keep-line" class="btn" hidden>Keep</button>
         <button type="button" id="exit-full" class="btn">Exit</button>
       </div>
@@ -114,7 +87,6 @@
         <div class="banner-actions">
           <button type="button" id="pause-prev" class="btn" aria-label="Previous sentence">Prev</button>
           <button type="button" id="pause-next" class="btn" aria-label="Next sentence">Next</button>
-          <button type="button" id="pause-keep-sentence" class="btn">Keep this sentence</button>
           <button type="button" id="paused-resume" class="btn btn-primary">Resume</button>
         </div>
       </div>
@@ -127,11 +99,6 @@
       </div>
       <div class="stage">
         <div id="karaoke" class="karaoke"></div>
-        <div id="rsvp" class="rsvp" hidden>
-          <p id="rsvp-prev" class="rsvp-side"></p>
-          <p id="rsvp-current" class="rsvp-current"></p>
-          <p id="rsvp-next" class="rsvp-side"></p>
-        </div>
         <div id="drill" class="drill" hidden>
           <p id="drill-kicker">Tap its corner</p>
           <p id="drill-letter" class="drill-letter">A</p>
@@ -144,72 +111,33 @@
             <h2 id="idle-title">Tap the corner</h2>
             <ol class="steps">
               <li id="idle-read">Read the highlighted word.</li>
-              <li id="idle-press">Tap its corner before the bar runs out.</li>
+              <li id="idle-press">Tap its corner, or press its first letter, before the bar runs out.</li>
               <li id="idle-miss">Hits build a streak. A miss freezes the board, then you continue.</li>
-              <li>Each breath fills a blank in a sentence you just read.</li>
             </ol>
             <button type="button" id="idle-start" class="btn btn-primary btn-large btn-block">Start</button>
-            <button type="button" id="idle-restart" class="btn btn-block" hidden>Start from the beginning</button>
-            <p id="idle-place" class="hint" hidden></p>
             <button type="button" id="idle-drill" class="btn btn-block">Drill corners</button>
             <p id="idle-drill-note" class="hint">One letter at a time. It stays until you tap its corner.</p>
             <p class="hint">Space also starts, pauses, and resumes.</p>
             <p id="idle-step" class="hint">Left arrow restarts this sentence, then steps to the previous one. Right arrow skips to the next sentence. Previous and Next above the text do the same.</p>
-            <p id="idle-round" class="hint"></p>
-            <p id="idle-recital" class="hint" hidden></p>
             <p id="idle-areas" class="hint">On a phone, tap a corner of the reading area. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9. The cross in the middle does nothing. A keyboard key still counts.</p>
-            <p id="idle-spot" class="hint" hidden></p>
             <p id="idle-best" class="hint" hidden></p>
-          </div>
-          <div id="panel-break" class="panel" hidden>
-            <h2 id="break-title">Breath</h2>
-            <div id="break-recall" class="recall" hidden>
-              <p id="break-sentence" class="recall-sentence" hidden></p>
-              <div id="break-choices" class="recall-choices" role="group" aria-label="Which word fills the blank?"></div>
-              <button type="button" id="break-ack" class="btn btn-block recall-ack" hidden>Got it</button>
-              <p id="break-recall-hint" class="hint"></p>
-            </div>
-            <div id="break-rest">
-              <p id="break-copy"></p>
-              <p id="break-result" class="record" hidden></p>
-              <button type="button" id="break-continue" class="btn btn-primary btn-large">Continue</button>
-              <button type="button" id="break-keep" class="btn">Keep a line</button>
-              <p id="break-hint" class="hint">Space continues. Your streak is still there.</p>
-            </div>
           </div>
           <div id="panel-done" class="panel" hidden>
             <h2 id="done-title">Done</h2>
-            <div id="done-recall" class="recall" hidden>
-              <p id="done-sentence" class="recall-sentence" hidden></p>
-              <div id="done-choices" class="recall-choices" role="group" aria-label="Which word fills the blank?"></div>
-              <button type="button" id="done-ack" class="btn btn-block recall-ack" hidden>Got it</button>
-              <p id="done-recall-hint" class="hint"></p>
-            </div>
-            <div id="done-summary">
-              <p id="done-lead">You reached the end of this article.</p>
-              <dl class="stats">
-                <div><dt>Score</dt><dd id="done-score">0</dd></div>
-                <div><dt>Best streak</dt><dd id="done-streak">0</dd></div>
-                <div><dt>Accuracy</dt><dd id="done-accuracy">—</dd></div>
-                <div><dt>Reaction</dt><dd id="done-reaction">—</dd></div>
-              </dl>
-              <p id="done-note" class="record" hidden></p>
-              <p id="done-result" class="record" hidden></p>
-              <div class="btn-row">
+            <p id="done-lead">You reached the end of this article.</p>
+            <dl class="stats">
+              <div><dt>Score</dt><dd id="done-score">0</dd></div>
+              <div><dt>Best streak</dt><dd id="done-streak">0</dd></div>
+              <div><dt>All-time streak</dt><dd id="done-best">0</dd></div>
+            </dl>
+            <p id="done-note" class="record" hidden></p>
+            <div class="btn-row">
               <button type="button" id="done-again" class="btn btn-primary">Read again</button>
-              <button type="button" id="done-keep-sentence" class="btn">Keep this sentence</button>
               <button type="button" id="done-keep" class="btn">Keep a line</button>
-                <button type="button" id="done-article" class="btn">Change article</button>
-              </div>
+              <button type="button" id="done-article" class="btn">Change article</button>
             </div>
           </div>
         </div>
-      </div>
-      <div id="corner-pads" class="corner-pads" hidden>
-        <button type="button" class="corner-pad is-nw" data-zone="nw" aria-label="Top left, A to G and 0 to 2">A–G<br>0–2</button>
-        <button type="button" class="corner-pad is-ne" data-zone="ne" aria-label="Top right, H to M and 3 to 4">H–M<br>3–4</button>
-        <button type="button" class="corner-pad is-sw" data-zone="sw" aria-label="Bottom left, N to S and 5 to 6">N–S<br>5–6</button>
-        <button type="button" class="corner-pad is-se" data-zone="se" aria-label="Bottom right, T to Z and 7 to 9">T–Z<br>7–9</button>
       </div>
       <div id="quadrant-board" hidden>
         <div id="quadrant-grid" hidden>
@@ -227,10 +155,10 @@
       </div>
     </section>
 
-    <section class="keypad-dock" id="keypad-dock" aria-label="On-screen keys">
+    <section class="keypad-dock" id="keypad-dock" aria-label="On-screen keys" hidden>
       <div class="dock-bar">
         <p>On-screen keys</p>
-        <button type="button" id="toggle-keypad" class="btn" aria-expanded="true">Hide keys</button>
+        <button type="button" id="toggle-keypad" class="btn" aria-expanded="false">Hide keys</button>
       </div>
       <div id="keypad-body">
         <div id="keys-letters" class="keypad-grid"></div>
@@ -249,17 +177,15 @@
         <button type="button" class="btn js-close">Close</button>
       </div>
 
-      <h3>How you play</h3>
-      <div class="choice">
-        <label>
-          <input type="radio" name="play" value="words" checked>
-          <span><strong>Words</strong><small>Each word asks for its first letter. On a phone, tap the corner for its group.</small></span>
-        </label>
-        <label>
-          <input type="radio" name="play" value="recital">
-          <span><strong>Recital</strong><small>A phrase stays up to read. The first letter hides it, and the rest come from memory.</small></span>
-        </label>
+      <h3>How fast</h3>
+      <div class="pace-grid" id="pace-grid">
+        <button type="button" class="btn" data-pace="linger" aria-pressed="false">Linger</button>
+        <button type="button" class="btn" data-pace="study" aria-pressed="false">Study</button>
+        <button type="button" class="btn" data-pace="read" aria-pressed="false">Read</button>
       </div>
+      <p class="field-help">A pace sets speed, forgiveness, and how long a miss freezes. A correct letter still moves on immediately. A saved speed with no matching button keeps running until you pick one of these.</p>
+
+      <h3>The board</h3>
       <label class="check">
         <span><strong>Corner labels</strong><p>Names each corner. Top left is A–G and 0–2, top right is H–M and 3–4, bottom left is N–S and 5–6, and bottom right is T–Z and 7–9.</p></span>
         <input id="cfg-corner-labels" type="checkbox">
@@ -268,129 +194,14 @@
         <span><strong>Grid lines</strong><p>Draws the cross between the four corners. A tap in the middle does nothing.</p></span>
         <input id="cfg-corner-grid" type="checkbox">
       </label>
-      <p id="cfg-corner-note" class="field-help" hidden>Recital uses the letter keys. Corner labels and grid lines stay off until you switch back to Words.</p>
-      <label class="field">
-        <span>Which words need a key</span>
-        <select id="cfg-filter">
-          <option value="all">Every word</option>
-          <option value="long">Long words, 4 letters or more</option>
-          <option value="vowel">Starts with A, E, I, O, or U</option>
-          <option value="capital">Starts with a capital</option>
-        </select>
-        <span class="field-help">Other words stay in the sentence and dim. You only press on the bright ones.</span>
-      </label>
-      <label class="check">
-        <span><strong>Spot check</strong><p>About one in five longer words stays readable, then turns into blocks. Press the marked one. Shorter words keep the first letter.</p></span>
-        <input id="cfg-spot" type="checkbox">
-      </label>
-      <p id="cfg-spot-note" class="field-help" hidden>Recital already hides the phrase. Spot check stays off until you switch back to Words.</p>
-      <label class="field" id="cfg-look-field" hidden>
-        <span class="field-top"><span>Look</span><b id="cfg-look-val">350 ms</b></span>
-        <input id="cfg-look" type="range" min="200" max="800" step="10" value="350">
-        <span class="field-help">How long that word stays readable before the blocks. Longer words get a little more. Punctuation and the opening pause stretch it.</span>
-      </label>
-      <label class="check">
-        <span><strong>Show the answer</strong><p>Puts the first letter in the banner. Turn this off to read it from the word.</p></span>
-        <input id="cfg-target" type="checkbox" checked>
-      </label>
-      <label class="check">
-        <span><strong>Advance on a hit</strong><p>Move as soon as the letter is right. Off keeps the word up until the bar ends.</p></span>
-        <input id="cfg-advance" type="checkbox" checked>
-      </label>
-
-      <h3>How fast</h3>
-      <div class="pace-grid" id="pace-grid">
-        <button type="button" class="btn" data-pace="linger" aria-pressed="false">Linger</button>
-        <button type="button" class="btn" data-pace="study" aria-pressed="false">Study</button>
-        <button type="button" class="btn" data-pace="read" aria-pressed="false">Read</button>
-        <button type="button" class="btn" data-pace="warmup" aria-pressed="false">Warmup</button>
-        <button type="button" class="btn" data-pace="flow" aria-pressed="false">Flow</button>
-        <button type="button" class="btn" data-pace="reflex" aria-pressed="false">Reflex</button>
-      </div>
-      <p class="field-help">A pace sets speed, forgiveness, and how long a miss freezes. The pauses, the answer, and advance-on-hit stay as you set them.</p>
-
-      <label class="field">
-        <span class="field-top"><span>Reading speed</span><b id="cfg-wpm-val">150 WPM</b></span>
-        <input id="cfg-wpm" type="range" min="10" max="800" step="10" value="150">
-        <span class="field-help">How fast the highlight moves. Lower is calmer.</span>
-      </label>
-      <label class="field">
-        <span class="field-top"><span>Forgiveness</span><b id="cfg-forgive-val">280 ms</b></span>
-        <input id="cfg-forgive" type="range" min="0" max="800" step="10" value="280">
-        <span class="field-help">Extra time after the word's slot before it counts as a miss.</span>
-      </label>
-      <label class="field">
-        <span class="field-top"><span>Freeze on a miss</span><b id="cfg-freeze-val">0.8 s</b></span>
-        <input id="cfg-freeze" type="range" min="0" max="3" step="0.1" value="0.8">
-        <span class="field-help">How long the board stops. Zero keeps moving.</span>
-      </label>
-      <p class="tune-sub">Pauses</p>
-      <label class="field">
-        <span class="field-top"><span>Punctuation pause</span><b id="cfg-punct-val">1.5×</b></span>
-        <input id="cfg-punct" type="range" min="1" max="3" step="0.1" value="1.5">
-        <span class="field-help">Extra time on words with punctuation.</span>
-      </label>
-      <label class="field">
-        <span class="field-top"><span>Opening pause</span><b id="cfg-opening-val">1.5×</b></span>
-        <input id="cfg-opening" type="range" min="1" max="3" step="0.1" value="1.5">
-        <span class="field-help">Extra time on the first word after a window closes.</span>
-      </label>
-      <p id="cfg-window" class="window-note"></p>
-
-      <h3>Breaths</h3>
-      <label class="field">
-        <span class="field-top"><span>Round length</span><b id="cfg-round-val">40 words</b></span>
-        <input id="cfg-round" type="range" min="0" max="200" step="5" value="40">
-        <span class="field-help">0 reads the whole article with no breath screen. Any other setting waits for a period, question mark, or exclamation mark after that many words.</span>
-      </label>
-      <label class="check">
-        <span><strong>Question at the end</strong><p>Asks you to fill a blank when the article is finished. A breath in the middle still asks.</p></span>
-        <input id="cfg-end-question" type="checkbox" checked>
-      </label>
-
-      <h3>The board</h3>
-      <div class="choice">
-        <label>
-          <input type="radio" name="view" value="karaoke" checked>
-          <span><strong>Karaoke</strong><small>The paragraph stays up and the highlight moves.</small></span>
-        </label>
-        <label>
-          <input type="radio" name="view" value="rsvp">
-          <span><strong>One word</strong><small>A large word, with the previous and next nearby.</small></span>
-        </label>
-      </div>
       <div class="theme-grid" id="theme-grid">
         <button type="button" class="theme-btn is-active" data-theme="signal" aria-pressed="true">Signal</button>
         <button type="button" class="theme-btn" data-theme="paper" aria-pressed="false">Paper</button>
         <button type="button" class="theme-btn" data-theme="night" aria-pressed="false">Night</button>
         <button type="button" class="theme-btn" data-theme="contrast" aria-pressed="false">Contrast</button>
       </div>
-      <label class="field">
-        <span class="field-top"><span>Type size</span><b id="cfg-font-val">100%</b></span>
-        <input id="cfg-font" type="range" min="85" max="160" step="5" value="100">
-      </label>
-      <label class="check">
-        <span><strong>Show the time bar</strong><p>A draining bar is easier to trust than a hidden clock.</p></span>
-        <input id="cfg-bar" type="checkbox" checked>
-      </label>
-      <label class="check">
-        <span><strong>Sound</strong><p>A soft chime on a hit, a low tone on a miss.</p></span>
-        <input id="cfg-sound" type="checkbox" checked>
-      </label>
-      <label class="check">
-        <span><strong>On-screen keys</strong><p>Shows the letter keys during Recital. Words uses the four corners.</p></span>
-        <input id="cfg-keypad" type="checkbox" checked>
-      </label>
-      <label class="check">
-        <span><strong>Focus mode</strong><p>Hides the extra numbers and the keys so the word is the only job.</p></span>
-        <input id="cfg-focus" type="checkbox">
-      </label>
-      <label class="check">
-        <span><strong>Reduce motion</strong><p>Stops the miss flash. The time bar still moves.</p></span>
-        <input id="cfg-motion" type="checkbox">
-      </label>
 
-      <p class="field-help">Puts every control on this screen back to the start. The article stays.</p>
+      <p class="field-help">Puts the pace, the colours, and the corner guides back to the start. The article, the sound, and the keys stay as they are.</p>
       <div class="btn-row modal-actions">
         <button type="button" id="cfg-reset" class="btn">Reset all</button>
         <button type="button" class="btn btn-primary js-close">Back to reading</button>
@@ -403,11 +214,10 @@
       <div class="modal-head">
         <div>
           <h2 id="library-title">Articles</h2>
-          <p class="field-help">Pick a text or paste your own. Loading it stops the current run.</p>
+          <p class="field-help">Paste a text. Loading it stops the current run.</p>
         </div>
         <button type="button" class="btn js-close">Close</button>
       </div>
-      <div id="preset-list" class="preset-grid"></div>
       <h3 id="kept-title" class="shelf-title" hidden>Kept lines</h3>
       <p id="kept-note" class="kept-note" hidden></p>
       <div id="kept-list" class="kept-list" hidden></div>
@@ -458,29 +268,6 @@
         <button type="button" id="mark-save" class="btn btn-primary">Save</button>
         <button type="button" class="btn js-close">Cancel</button>
       </div>
-    </div>
-  </div>
-
-  <div id="modal-stats" class="modal-back" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stats-title" tabindex="-1">
-      <div class="modal-head">
-        <div>
-          <h2 id="stats-title">This run</h2>
-          <p class="field-help">Numbers from the article that is loaded now, plus your all-time streak.</p>
-        </div>
-        <button type="button" class="btn js-close">Close</button>
-      </div>
-      <dl class="stats">
-        <div><dt>Score</dt><dd id="stat-score">0</dd></div>
-        <div><dt>Best streak</dt><dd id="stat-streak">0</dd></div>
-        <div><dt>Accuracy</dt><dd id="stat-accuracy">—</dd></div>
-        <div><dt>Reaction</dt><dd id="stat-reaction">—</dd></div>
-        <div><dt>Hits</dt><dd id="stat-hits">0</dd></div>
-        <div><dt>Misses</dt><dd id="stat-misses">0</dd></div>
-        <div><dt>Words</dt><dd id="stat-words">0</dd></div>
-        <div><dt>All-time streak</dt><dd id="stat-best">0</dd></div>
-      </dl>
-      <button type="button" class="btn js-close btn-block">Back to reading</button>
     </div>
   </div>
 
