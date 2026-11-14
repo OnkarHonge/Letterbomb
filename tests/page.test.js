@@ -7,7 +7,9 @@ import { countWords } from '../src/engine/parseText.js';
 import {
   cornerBoard,
   missRule,
+  paceLabel,
   pauseRule,
+  secondsLeftLabel,
   stepHint,
   wordMarks,
 } from '../src/ui/paint.js';
@@ -162,6 +164,11 @@ describe('kept lines', () => {
     expect(html).toContain('id="keep-line"');
     expect(html).toContain('id="modal-mark"');
     expect(html).toContain('id="done-keep"');
+    expect(html).toContain('id="pause-keep-sentence"');
+    expect(html).toContain('id="done-keep-sentence"');
+    expect(html).toContain('id="corner-pads"');
+    expect(html).toContain('id="run-status"');
+    expect(html).toContain('id="idle-restart"');
     expect(html).not.toContain('id="break-keep"');
   });
 });
@@ -194,6 +201,15 @@ describe('gap beat layout', () => {
 });
 
 describe('reading full screen', () => {
+  it('keeps the place, the pace, the streak, and the seconds on the card', () => {
+    expect(paceLabel({ wpm: 10, forgivenessMs: 800, freezeSec: 0.5 })).toBe('Linger');
+    expect(paceLabel({ wpm: 15, forgivenessMs: 800, freezeSec: 0.5 })).toBe('Custom');
+    expect(secondsLeftLabel({ status: 'playing', deadlineMs: 2300, progress: 0.5 })).toBe('1.1s');
+    expect(secondsLeftLabel({ status: 'frozen', freezeLeftMs: 500 })).toBe('0.5s');
+    expect(decl(rule('.run-status'), 'display')).toBe('none');
+    expect(decl(rule('body.is-reading-full .run-status'), 'display')).toBe('flex');
+  });
+
   it('hides the rest of the page and keeps Exit inside the card', () => {
     expect(decl(rule('#exit-full'), 'display')).toBe('none');
     const hidden = rule(
@@ -214,6 +230,11 @@ describe('corner drill layout', () => {
   it('lets a corner tap through and keeps Stop drill clickable', () => {
     expect(decl(rule('.drill'), 'pointer-events')).toBe('none');
     expect(decl(rule('.drill .btn'), 'pointer-events')).toBe('auto');
+    expect(decl(rule('.corner-pads'), 'pointer-events')).toBe('none');
+    expect(decl(rule('.corner-pad'), 'pointer-events')).toBe('auto');
+    expect(decl(rule('.stage'), 'pointer-events')).toBe('none');
+    expect(decl(rule('.karaoke'), 'pointer-events')).toBe('none');
+    expect(decl(rule('.karaoke .word,\n.overlay,\n.drill .btn'), 'pointer-events')).toBe('auto');
   });
 });
 

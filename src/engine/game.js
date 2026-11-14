@@ -49,6 +49,9 @@ export function createGame({ now = () => 0 } = {}) {
   let misses = 0;
   let reactionTimes = [];
   let events = [];
+  let coachSeen = 0;
+  let coachZone = null;
+  let coachMarks = new Map();
 
   function emit(event) {
     events.push(event);
@@ -88,6 +91,30 @@ export function createGame({ now = () => 0 } = {}) {
     if (opening) pendingOpening = false;
     deadlineMs = deadlineFor(word);
     emit({ type: 'word', index });
+    noteCoach(word);
+  }
+
+  /**
+   * The first three new target words of a fresh run light their corner.
+   * Continuing a saved place, and a practice word, do not.
+   * Pausing and resuming the same word keeps the hint it already had.
+   * This hint never reveals the letter.
+   */
+  function noteCoach(word) {
+    if (index < frontier) {
+      coachZone = null;
+      return;
+    }
+    if (coachMarks.has(index)) {
+      coachZone = coachMarks.get(index);
+      return;
+    }
+    coachZone = null;
+    if (word?.isTarget) {
+      coachSeen += 1;
+      if (coachSeen <= 3) coachZone = zoneForKey(word.targetChar);
+    }
+    coachMarks.set(index, coachZone);
   }
 
   function finish() {
@@ -144,7 +171,7 @@ export function createGame({ now = () => 0 } = {}) {
   }
 
   function stepOptions() {
-    const allowed = status === STATUS.PLAYING || status === STATUS.FROZEN || status === STATUS.PAUSED;
+    const allowed = status === STATUS.PAUSED;
     if (!allowed || index < 0 || index >= words.length) {
       return { previous: false, next: false };
     }
@@ -270,6 +297,9 @@ export function createGame({ now = () => 0 } = {}) {
     opening = false;
     pendingOpening = false;
     lastPressAt = Number.NEGATIVE_INFINITY;
+    coachSeen = 0;
+    coachZone = null;
+    coachMarks = new Map();
     epoch += 1;
     emit({ type: 'load', total: words.length });
     return words.length;
@@ -283,12 +313,19 @@ export function createGame({ now = () => 0 } = {}) {
     return { ...config };
   }
 
-  function start(at = now()) {
+  function start(at = now(), options = {}) {
     if (!words.length) return false;
     if (status !== STATUS.IDLE && status !== STATUS.FINISHED) return false;
     resetStats();
-    index = 0;
-    frontier = 0;
+    const requested = Number(options?.index);
+    const dest = Number.isInteger(requested) && requested > 0 && requested < words.length
+      ? requested
+      : 0;
+    index = dest;
+    frontier = dest;
+    coachSeen = dest > 0 ? 3 : 0;
+    coachZone = null;
+    coachMarks = new Map();
     held = false;
     missReason = null;
     missedKey = null;
@@ -302,6 +339,20 @@ export function createGame({ now = () => 0 } = {}) {
   function pause() {
     if (status !== STATUS.PLAYING) return false;
     status = STATUS.PAUSED;
+    emit({ type: 'pause' });
+    return true;
+  }
+
+  /**
+   * Leave a live word paused. A miss that was waiting out its freeze
+   * stays answered, so Resume moves on instead of replaying it.
+   */
+  function settle() {
+    if (status === STATUS.PLAYING) return pause();
+    if (status !== STATUS.FROZEN) return false;
+    status = STATUS.PAUSED;
+    held = false;
+    freezeUntil = 0;
     emit({ type: 'pause' });
     return true;
   }
@@ -338,19 +389,17 @@ export function createGame({ now = () => 0 } = {}) {
   /**
    * Left restarts the current sentence, then steps to the previous one.
    * Right skips to the next sentence.
-   * The landing word starts clean, with the opening pause on its first target.
+   * The landing word stays paused, with the opening pause ready for Resume.
    */
   function stepSentence(direction, at = now()) {
-    if (status !== STATUS.PLAYING && status !== STATUS.FROZEN && status !== STATUS.PAUSED) {
-      return false;
-    }
+    if (status !== STATUS.PAUSED) return false;
     if (!Number.isFinite(direction) || direction === 0) return false;
     if (index < 0 || index >= words.length) return false;
     const dir = direction < 0 ? -1 : 1;
     const dest = stepTarget(dir);
     if (dest == null || dest === index) return false;
     const line = stepLine(dir, dest);
-    moveTo(dest, at, { stayPaused: status === STATUS.PAUSED, grantOpening: true });
+    moveTo(dest, at, { stayPaused: true, grantOpening: true });
     emit({ type: 'step', direction: dir, index, line });
     return true;
   }
@@ -460,6 +509,8 @@ export function createGame({ now = () => 0 } = {}) {
       missReason,
       missedKey,
       freezeLeftMs,
+      coach: coachZone != null,
+      coachZone,
       articleLabel: labelText,
       word,
       config: { ...config },
@@ -475,6 +526,13 @@ export function createGame({ now = () => 0 } = {}) {
     cover,
     jumpTo,
     stepSentence,
+    settle,
+    sentenceBounds() {
+      const cursor = index >= words.length ? words.length - 1 : index;
+      if (!words[cursor]) return null;
+      const span = sentenceSpanAt(cursor);
+      return { start: span.start, end: span.end + 1 };
+    },
     hold,
     release,
     press,

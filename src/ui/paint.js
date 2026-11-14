@@ -1,3 +1,4 @@
+import { matchingPace, PACE_PRESETS } from '../engine/config.js';
 import { missLine } from '../engine/quadrant.js';
 import { must, setText } from './dom.js';
 import {
@@ -7,6 +8,23 @@ import {
   scrollTopForReadingLine,
   scrollWasTaken,
 } from './scroll.js';
+
+/** The pace name for the line that stays up in full screen. */
+export function paceLabel(config) {
+  const id = matchingPace(config || {});
+  return id ? PACE_PRESETS[id].label : 'Custom';
+}
+
+/** Seconds still on the clock, for the line that stays up in full screen. */
+export function secondsLeftLabel(snap) {
+  let ms = null;
+  if (snap.status === 'frozen') ms = snap.freezeLeftMs;
+  else if (snap.status === 'playing') ms = snap.deadlineMs * (1 - Number(snap.progress) || 0);
+  else if (snap.status === 'paused' && snap.deadlineMs) ms = snap.deadlineMs;
+  if (ms == null || !Number.isFinite(ms)) return '';
+  const seconds = Math.max(0, ms / 1000);
+  return seconds >= 10 ? `${Math.round(seconds)}s` : `${seconds.toFixed(1)}s`;
+}
 
 /** Which corner guides to draw while a run or the drill is active. */
 export function cornerBoard({ showCornerLabels, showCornerGrid, active }) {
@@ -89,6 +107,13 @@ export function createPainter() {
   const nextButtons = [sentenceNext, must('pause-next'), must('strike-next')];
   const pauseCopy = must('pause-copy');
   const idleStart = must('idle-start');
+  const idleRestart = must('idle-restart');
+  const idlePlace = must('idle-place');
+  const cornerPads = must('corner-pads');
+  const runPlace = must('run-place');
+  const runPace = must('run-pace');
+  const runStreak = must('run-streak');
+  const runSeconds = must('run-seconds');
   const drillPanel = must('drill');
   const drillLetter = must('drill-letter');
   const drillNote = must('drill-note');
@@ -317,8 +342,23 @@ export function createPainter() {
     panelIdle.hidden = snap.status !== 'idle';
     panelDone.hidden = snap.status !== 'finished';
     idleStart.disabled = snap.total === 0;
+    const resumeAt = Number(extras?.continueIndex) || 0;
+    const continuing = snap.status === 'idle' && resumeAt > 0 && resumeAt < snap.total;
+    setText(idleStart, continuing ? 'Continue' : 'Start');
+    idleRestart.hidden = !continuing;
+    idlePlace.hidden = !continuing;
+    if (continuing) setText(idlePlace, `Word ${resumeAt + 1} of ${snap.total}`);
 
-    sentenceStep.hidden = drilling || snap.status !== 'playing';
+    sentenceStep.hidden = drilling || snap.status !== 'paused';
+    const placeCount = !snap.total
+      ? 0
+      : snap.status === 'finished'
+        ? Math.min(snap.index, snap.total)
+        : Math.min(snap.index + 1, snap.total);
+    setText(runPlace, snap.total ? `${placeCount} of ${snap.total}` : '');
+    setText(runPace, paceLabel(config));
+    setText(runStreak, `Streak ${snap.streak}`);
+    setText(runSeconds, secondsLeftLabel(snap));
     for (const button of previousButtons) button.disabled = !snap.step?.previous;
     for (const button of nextButtons) button.disabled = !snap.step?.next;
 
@@ -344,9 +384,16 @@ export function createPainter() {
       showCornerGrid: config.showCornerGrid,
       active: snap.status === 'playing' || Boolean(extras?.drill?.on),
     });
+    const showPads = snap.status === 'playing' || drilling;
+    cornerPads.hidden = !showPads;
+    const labelPads = Boolean(showPads && (config.showCornerLabels || drilling));
+    cornerPads.classList.toggle('is-labeled', labelPads);
+    for (const pad of cornerPads.querySelectorAll('[data-zone]')) {
+      pad.classList.toggle('is-hot', pad.dataset.zone === snap.coachZone);
+    }
     quadrantBoard.hidden = !guides.board;
     quadrantGrid.hidden = !guides.grid;
-    quadrantLabels.hidden = !guides.labels;
+    quadrantLabels.hidden = !guides.labels || labelPads;
     keypadDock.hidden = !config.showKeypad;
     toggleKeypad.setAttribute('aria-expanded', String(config.showKeypad));
     toggleKeys.setAttribute('aria-pressed', String(config.showKeypad));

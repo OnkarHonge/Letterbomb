@@ -20,13 +20,13 @@ export const DEFAULT_CONFIG = {
   showCornerGrid: false,
 };
 
-/** Corner labels and grid lines start on only for a touchscreen. */
+/** Corner labels and the grid start on. A saved off choice still wins. */
 export function configForDevice(touchscreen) {
-  const on = Boolean(touchscreen);
+  void touchscreen;
   return {
     ...DEFAULT_CONFIG,
-    showCornerLabels: on,
-    showCornerGrid: on,
+    showCornerLabels: true,
+    showCornerGrid: true,
   };
 }
 

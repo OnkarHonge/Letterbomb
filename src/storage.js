@@ -1,4 +1,12 @@
 const KEY = 'reflexread.v1';
+
+function cleanPlace(place) {
+  const index = Number(place?.index);
+  const articleKey = typeof place?.articleKey === 'string' ? place.articleKey : '';
+  if (!articleKey || !Number.isInteger(index) || index < 0) return null;
+  return { articleKey, index };
+}
+
 export const TEXT_LIMIT = 400_000;
 
 export function loadSave() {
@@ -32,7 +40,8 @@ export function writeSave(data) {
           label: article.label || 'Custom',
           text: article.text,
         }
-      : null,
+        : null,
+    place: cleanPlace(data.place),
   };
 
   try {

@@ -581,6 +581,8 @@ describe('sentence step', () => {
     const game = setup(PIECE, { openingMultiplier: 2 });
     game.start(0);
     game.press('a', 20);
+    expect(game.stepSentence(1, 30)).toBe(false);
+    game.pause();
     expect(game.stepSentence(1, 40)).toBe(true);
     expect(game.consumeEvents().find((event) => event.type === 'step')).toMatchObject({
       direction: 1,
@@ -588,23 +590,29 @@ describe('sentence step', () => {
       line: 'Next sentence.',
     });
     expect(game.snapshot(40)).toMatchObject({
-      status: STATUS.PLAYING,
+      status: STATUS.PAUSED,
       index: 3,
       score: 100,
       streak: 1,
       hits: 1,
       misses: 0,
-      deadlineMs: 200,
-      progress: 0,
       step: { previous: true, next: true },
     });
     expect(game.snapshot(40).word.original).toBe('Hotel');
+    game.resume(40);
+    expect(game.snapshot(40)).toMatchObject({
+      status: STATUS.PLAYING,
+      index: 3,
+      deadlineMs: 200,
+      progress: 0,
+    });
   });
 
   it('restarts the current sentence before it steps back', () => {
     const game = setup(PIECE, { openingMultiplier: 2 });
     game.start(0);
     game.press('a', 20);
+    game.pause();
     expect(game.stepSentence(-1, 40)).toBe(true);
     expect(game.consumeEvents().find((event) => event.type === 'step').line).toBe(
       'Start of this sentence.',
@@ -613,12 +621,15 @@ describe('sentence step', () => {
       index: 0,
       score: 100,
       streak: 1,
-      deadlineMs: 200,
+      status: STATUS.PAUSED,
     });
+    game.resume(40);
+    expect(game.snapshot(40).deadlineMs).toBe(200);
 
     game.press('a', 60);
     game.press('b', 100);
     game.press('g', 140);
+    game.pause();
     expect(game.stepSentence(-1, 160)).toBe(true);
     expect(game.consumeEvents().find((event) => event.type === 'step').line).toBe(
       'Previous sentence.',
@@ -634,7 +645,9 @@ describe('sentence step', () => {
     game.press('a', 20);
     game.press('b', 60);
     game.press('g', 100);
+    game.pause();
     game.stepSentence(-1, 120);
+    game.resume(130);
     expect(game.snapshot(120)).toMatchObject({ index: 0, score: 300, streak: 3, hits: 3 });
 
     game.press('z', 140);
@@ -667,14 +680,22 @@ describe('sentence step', () => {
     frozen.start(0);
     frozen.press('z', 10);
     expect(frozen.status).toBe(STATUS.FROZEN);
+    expect(frozen.stepSentence(1, 30)).toBe(false);
+    expect(frozen.settle()).toBe(true);
+    expect(frozen.status).toBe(STATUS.PAUSED);
     expect(frozen.stepSentence(1, 30)).toBe(true);
     expect(frozen.snapshot(30)).toMatchObject({
-      status: STATUS.PLAYING,
+      status: STATUS.PAUSED,
       index: 3,
       misses: 1,
       streak: 0,
-      progress: 0,
+    });
+    frozen.resume(40);
+    expect(frozen.snapshot(40)).toMatchObject({
+      status: STATUS.PLAYING,
+      index: 3,
       deadlineMs: 200,
+      progress: 0,
     });
 
     const paused = setup(PIECE, { openingMultiplier: 2 });
@@ -695,16 +716,74 @@ describe('sentence step', () => {
   it('splits on a blank line and keeps a comma inside the sentence', () => {
     const paragraphs = setup('Alpha Beta\n\nGolf Hotel.');
     paragraphs.start(0);
+    paragraphs.pause();
     expect(paragraphs.stepSentence(1, 10)).toBe(true);
     expect(paragraphs.snapshot(10).word.original).toBe('Golf');
 
     const comma = setup('Alpha, Beta. Golf.');
     comma.start(0);
+    comma.pause();
     expect(comma.stepSentence(1, 10)).toBe(true);
     expect(comma.snapshot(10).word.original).toBe('Golf.');
   });
+});
 
-  
+describe('the board changes', () => {
+  it('lights the corner for the first three target words', () => {
+    const game = setup('Alpha Beta Golf Hotel');
+    game.start(0);
+    expect(game.snapshot(0)).toMatchObject({ coach: true, coachZone: 'nw', answer: 'A' });
+    game.press('a', 40);
+    expect(game.snapshot(40)).toMatchObject({ coach: true, coachZone: 'nw', index: 1 });
+    game.press('b', 80);
+    game.press('g', 120);
+    expect(game.snapshot(120)).toMatchObject({
+      coach: false,
+      coachZone: null,
+      index: 3,
+      answer: 'H',
+    });
+  });
 
-  
+  it('does not light a corner again when the same word is resumed', () => {
+    const game = setup('Alpha Beta');
+    game.start(0);
+    expect(game.snapshot(0).coachZone).toBe('nw');
+    game.pause();
+    game.resume(20);
+    expect(game.snapshot(20)).toMatchObject({ index: 0, coach: true, coachZone: 'nw' });
+  });
+
+  it('continues at a saved word and skips the corner hint', () => {
+    const game = setup('Alpha Beta Golf Hotel');
+    game.start(0, { index: 2 });
+    expect(game.snapshot(0)).toMatchObject({
+      status: STATUS.PLAYING,
+      index: 2,
+      coach: false,
+      coachZone: null,
+    });
+    expect(game.snapshot(0).word.original).toBe('Golf');
+    expect(game.press('g', 10)).toBe(true);
+    expect(game.snapshot(10)).toMatchObject({ index: 3, score: 100 });
+  });
+
+  it('parks a miss as a pause, and Resume moves on', () => {
+    const game = setup('Alpha Beta', { freezeSec: 1 });
+    game.start(0);
+    game.press('z', 10);
+    expect(game.status).toBe(STATUS.FROZEN);
+    expect(game.settle()).toBe(true);
+    expect(game.snapshot(10)).toMatchObject({ status: STATUS.PAUSED, index: 0, misses: 1 });
+    game.resume(20);
+    expect(game.snapshot(20)).toMatchObject({ status: STATUS.PLAYING, index: 1, misses: 1 });
+  });
+
+  it('names the sentence around the current word', () => {
+    const game = setup('Alpha Beta. Golf Hotel.');
+    game.start(0);
+    game.press('a', 10);
+    game.pause();
+    expect(game.sentenceBounds()).toEqual({ start: 0, end: 2 });
+  });
 });
